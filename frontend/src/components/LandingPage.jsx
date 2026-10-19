@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from "react"
 import { 
   ArrowRight, CheckCircle2, XCircle, ShieldCheck, 
-  FileText, Users, Cpu, Sparkles, Scale, RefreshCw,
-  Search, Check, AlertCircle, ArrowUpRight, BarChart3,
-  BookOpen, SlidersHorizontal, EyeOff, FileCheck2
+  Cpu, Scale, RefreshCw, BookOpen, EyeOff, FileCheck2
 } from "lucide-react"
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
 
-export function LandingPage({ setActiveView, onSelectPreset }) {
+export function LandingPage({ setActiveView, onSelectPreset: _onSelectPreset }) {
   // Interactive demo state
   const [activePreset, setActivePreset] = useState("biased")
   const [scannerText, setScannerText] = useState(

@@ -13,6 +13,8 @@ import java.util.*;
 @Service
 public class JobService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JobService.class);
+
     private final JobRepository jobRepository;
     private final UserRepository userRepository;
     private final SkillRepository skillRepository;
@@ -98,9 +100,12 @@ public class JobService {
                     report.setTotalFlaggedTerms(report.getRewriteSuggestions().size());
                 }
                 job.getBiasReports().add(report);
+                log.info("[JobService] Successfully created bias report for job '{}' with {} flagged terms", job.getTitle(), report.getTotalFlaggedTerms());
+            } else if (biasAnalysis != null && biasAnalysis.containsKey("error")) {
+                log.warn("[JobService] AI microservice reported error analyzing bias for job '{}': {}", job.getTitle(), biasAnalysis.get("error"));
             }
-        } catch (Exception ignored) {
-            // Safe handling if AI service is not running during job creation
+        } catch (Exception e) {
+            log.warn("[JobService] AI microservice bias analysis unavailable for job '{}': {}", job.getTitle(), e.getMessage());
         }
 
         return jobRepository.save(job);

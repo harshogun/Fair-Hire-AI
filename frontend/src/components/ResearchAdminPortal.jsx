@@ -5,54 +5,39 @@ import {
   Award,
   Zap,
   CheckCircle,
-  FileSpreadsheet,
   Download,
   Play,
   Database,
   Users,
-  Layers,
-  ArrowUpRight,
-  AlertTriangle
+  Layers
 } from "lucide-react"
 import { fetchResearchMetrics, fetchResearchExperiments, isAdmin, getStoredUser } from "../services/api"
 
 export function ResearchAdminPortal() {
   const [metrics, setMetrics] = useState(null)
   const [experiments, setExperiments] = useState([])
-  const [loading, setLoading] = useState(false)
   const [benchmarking, setBenchmarking] = useState(false)
-  const [authError, setAuthError] = useState(null)
-
-  // Dataset & Users Summary
-  const [usersCount, setUsersCount] = useState(3)
-  const [datasetSummary, setDatasetSummary] = useState({
-    jds: 4,
-    resumes: 10,
-    taxonomySkills: 110
-  })
 
   useEffect(() => {
     if (isAdmin()) {
-      loadData()
+      let ignore = false
+      Promise.all([fetchResearchMetrics(), fetchResearchExperiments()])
+        .then(([mData, eData]) => {
+          if (!ignore) {
+            setMetrics(mData)
+            setExperiments(Array.isArray(eData) ? eData : [])
+          }
+        })
+        .catch(err => {
+          if (!ignore) {
+            console.error("Error loading metrics:", err)
+          }
+        })
+      return () => {
+        ignore = true
+      }
     }
   }, [])
-
-  const loadData = async () => {
-    setLoading(true)
-    setAuthError(null)
-    try {
-      const mData = await fetchResearchMetrics()
-      setMetrics(mData)
-
-      const eData = await fetchResearchExperiments()
-      setExperiments(Array.isArray(eData) ? eData : [])
-    } catch (err) {
-      console.error("Error loading metrics:", err)
-      setAuthError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleRunBenchmark = async () => {
     setBenchmarking(true)

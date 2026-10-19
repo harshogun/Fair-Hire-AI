@@ -20,7 +20,10 @@ try:
 except ImportError:
     docx = None
 
-from config import SKILL_TAXONOMY
+try:
+    from app.core.config import SKILL_TAXONOMY
+except ImportError:
+    from config import SKILL_TAXONOMY
 
 
 def extract_text_from_file(file_path):

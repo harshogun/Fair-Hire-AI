@@ -1,5 +1,5 @@
 import React from "react"
-import { Layers, ShieldCheck, BookOpen, ExternalLink, Activity } from "lucide-react"
+import { Layers, Activity } from "lucide-react"
 
 export function Footer({ setActiveView }) {
   return (

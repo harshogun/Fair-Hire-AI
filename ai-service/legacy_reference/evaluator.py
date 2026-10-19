@@ -23,7 +23,13 @@ system - that comparison IS the novelty claim.
 """
 
 import statistics
-from modules import matcher, blind_screen, bias_detector
+try:
+    from modules import matcher, blind_screen, bias_detector
+except ImportError:
+    try:
+        from legacy_reference import matcher, blind_screen, bias_detector
+    except ImportError:
+        import matcher, blind_screen, bias_detector
 
 
 def rank_candidates(scored_candidates, score_key):

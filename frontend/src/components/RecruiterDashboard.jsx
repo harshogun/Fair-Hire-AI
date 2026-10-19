@@ -23,7 +23,7 @@ import {
   MAX_RESUME_FILE_SIZE_BYTES
 } from "../services/api"
 
-export function RecruiterDashboard({ onOpenLegacyStudio, initialJobId, onSelectJob }) {
+export function RecruiterDashboard({ onOpenLegacyStudio: _onOpenLegacyStudio, initialJobId, onSelectJob }) {
   const [jobs, setJobs] = useState([])
   const [selectedJobId, setSelectedJobId] = useState(() => initialJobId ? Number(initialJobId) : null)
   const [selectedJob, setSelectedJob] = useState(null)
@@ -39,7 +39,7 @@ export function RecruiterDashboard({ onOpenLegacyStudio, initialJobId, onSelectJ
     if (initialJobId && Number(initialJobId) !== selectedJobId) {
       setSelectedJobId(Number(initialJobId))
     }
-  }, [initialJobId])
+  }, [initialJobId, selectedJobId])
 
   // Configurable ATS Scoring Weights
   const [keywordWeight, setKeywordWeight] = useState(80) // Phase 4 canonical required skill coverage
@@ -123,7 +123,7 @@ export function RecruiterDashboard({ onOpenLegacyStudio, initialJobId, onSelectJ
         } else {
           setBlindData(null)
         }
-      } catch (ignored) {
+      } catch {
         setBlindData(null)
       }
 
@@ -136,7 +136,7 @@ export function RecruiterDashboard({ onOpenLegacyStudio, initialJobId, onSelectJ
         } else {
           setBiasReport(null)
         }
-      } catch (ignored) {
+      } catch {
         setBiasReport(null)
       }
 
@@ -152,7 +152,7 @@ export function RecruiterDashboard({ onOpenLegacyStudio, initialJobId, onSelectJ
             const rwData = await rwRes.json()
             setRewriteData(rwData)
           }
-        } catch (ignored) {}
+        } catch {}
       }
     } catch (err) {
       console.error("Failed to fetch job details:", err)
@@ -166,12 +166,14 @@ export function RecruiterDashboard({ onOpenLegacyStudio, initialJobId, onSelectJ
   useEffect(() => {
     fetchJobs()
     fetchResumes()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Fetch Details for Selected Job
   useEffect(() => {
     if (!selectedJobId) return
     loadJobDetails(selectedJobId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedJobId])
 
   // Run/Re-calculate Matching with Phase 4 Deterministic Engine

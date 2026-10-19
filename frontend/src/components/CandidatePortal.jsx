@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react"
-import { UserCheck, FileUp, Sparkles, CheckCircle2, AlertCircle, ArrowRight, BookOpen, Briefcase } from "lucide-react"
+import { UserCheck, FileUp, Sparkles, CheckCircle2, AlertCircle, Briefcase } from "lucide-react"
 import {
   fetchJobs as apiFetchJobs,
   uploadResume as apiUploadResume,
@@ -96,8 +96,6 @@ export function CandidatePortal({ onNavigate }) {
       setEvaluating(false)
     }
   }
-
-  const selectedJobObj = jobs.find(j => j.id === Number(selectedJobId))
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">

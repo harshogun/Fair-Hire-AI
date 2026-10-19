@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from "react"
 import { 
-  Download, Printer, RefreshCw, Plus, Award, 
-  BarChart3, FileText, CheckCircle, AlertTriangle, 
-  Search, X, Eye, ShieldCheck, ArrowUpRight, Copy, Check,
-  Cpu, Layers, Sparkles, Scale, FileSpreadsheet
+  Printer, RefreshCw, Plus, Award, 
+  BarChart3, FileText, AlertTriangle, 
+  Search, X, Eye, ShieldCheck, Copy, Check,
+  Cpu, FileSpreadsheet
 } from "lucide-react"
 import { Button } from "./ui/button"
-import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
 import { FairnessGauge } from "./ui/gauge"
 
-export function ResultsDashboard({ runId, setActiveView, onRescreenWithRewritten }) {
+export function ResultsDashboard({ runId, setActiveView, onRescreenWithRewritten: _onRescreenWithRewritten }) {
   const [runData, setRunData] = useState(null)
   const [activeTab, setActiveTab] = useState("leaderboard")
   const [searchTerm, setSearchTerm] = useState("")

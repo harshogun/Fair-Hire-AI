@@ -9,8 +9,10 @@ reproduce, inside a live system, the effect that Aslund & Skans (2012)
 observed in real-world blind recruitment.
 """
 
-import re
-from config import GENDER_PRONOUNS, IDENTITY_FIELDS_TO_STRIP
+try:
+    from app.core.config import GENDER_PRONOUNS, IDENTITY_FIELDS_TO_STRIP
+except ImportError:
+    from config import GENDER_PRONOUNS, IDENTITY_FIELDS_TO_STRIP
 
 
 def anonymize_resume(resume_text, candidate_name):

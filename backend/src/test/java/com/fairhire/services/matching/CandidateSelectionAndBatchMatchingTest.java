@@ -71,6 +71,21 @@ class CandidateSelectionAndBatchMatchingTest {
 
         skillSql = skillRepository.findByName("SQL")
                 .orElseGet(() -> skillRepository.save(new Skill("SQL", "DATABASE")));
+
+        var principal = new com.fairhire.config.FairHireUserPrincipal(
+                testRecruiter.getId(),
+                testRecruiter.getEmail(),
+                testRecruiter.getRole().name(),
+                "Engineering"
+        );
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(principal, null, java.util.Collections.emptyList())
+        );
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 
     private Job createJob(String title, String department, List<Skill> required, List<Skill> preferred) {

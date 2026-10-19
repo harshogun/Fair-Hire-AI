@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from "react"
 import { 
-  FileText, Users, UploadCloud, ArrowRight, Sparkles, 
-  Check, AlertCircle, File, Trash2, Cpu, Sliders, ShieldCheck,
-  Zap, RefreshCw, CheckCircle2, ShieldAlert
+  UploadCloud, ArrowRight, 
+  AlertCircle, File, Trash2, Cpu, ShieldAlert
 } from "lucide-react"
 import { Button } from "./ui/button"
-import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
 
 export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
@@ -23,24 +21,39 @@ export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
   // Real-time JD analysis
   const [liveAnalysis, setLiveAnalysis] = useState(null)
 
+  const selectPreset = (list, idx) => {
+    setSelectedPresetIndex(idx)
+    const target = list[idx]
+    if (target) {
+      setJdTitle(target.title)
+      setJdText(target.text)
+    }
+  }
+
   // Fetch sample JDs on mount
   useEffect(() => {
+    let ignore = false
     fetch("/api/sample-jds")
       .then(res => res.json())
       .then(data => {
-        setSampleJDs(data)
-        if (prefilledSampleIndex !== null && data[prefilledSampleIndex]) {
-          selectPreset(data, prefilledSampleIndex)
-        } else {
-          const savedCustom = sessionStorage.getItem("fairhire_custom_jd_text")
-          if (savedCustom) {
-            setJdTitle("Custom Sourced Role")
-            setJdText(savedCustom)
-            sessionStorage.removeItem("fairhire_custom_jd_text")
+        if (!ignore) {
+          setSampleJDs(data)
+          if (prefilledSampleIndex !== null && data[prefilledSampleIndex]) {
+            selectPreset(data, prefilledSampleIndex)
+          } else {
+            const savedCustom = sessionStorage.getItem("fairhire_custom_jd_text")
+            if (savedCustom) {
+              setJdTitle("Custom Sourced Role")
+              setJdText(savedCustom)
+              sessionStorage.removeItem("fairhire_custom_jd_text")
+            }
           }
         }
       })
       .catch(err => console.error("Failed to fetch sample JDs:", err))
+    return () => {
+      ignore = true
+    }
   }, [prefilledSampleIndex])
 
   // Live analysis of JD text with 500ms debounce and AbortController
@@ -75,15 +88,6 @@ export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
       controller.abort()
     }
   }, [jdText])
-
-  const selectPreset = (list, idx) => {
-    setSelectedPresetIndex(idx)
-    const target = list[idx]
-    if (target) {
-      setJdTitle(target.title)
-      setJdText(target.text)
-    }
-  }
 
   // 1-Click word neutralizer with regex escaping
   const replaceFlaggedWord = (originalWord, replacement) => {

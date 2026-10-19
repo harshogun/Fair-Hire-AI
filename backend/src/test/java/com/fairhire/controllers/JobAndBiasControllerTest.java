@@ -79,12 +79,20 @@ class JobAndBiasControllerTest {
                 "text", "We need a young, aggressive rockstar who can dominate the fast-paced market."
         );
 
-        mockMvc.perform(post("/api/bias/analyze")
+        var mvcResult = mockMvc.perform(post("/api/bias/analyze")
                         .header("Authorization", "Bearer " + jwtToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(biasPayload)))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.status").value("SERVICE_UNAVAILABLE"))
-                .andExpect(jsonPath("$.error").exists());
+                .andReturn();
+
+        int status = mvcResult.getResponse().getStatus();
+        org.junit.jupiter.api.Assertions.assertTrue(status == 200 || status == 503,
+                "Expected 200 (AI service running) or 503 (AI service offline), got: " + status);
+        if (status == 200) {
+            String content = mvcResult.getResponse().getContentAsString();
+            org.junit.jupiter.api.Assertions.assertTrue(content.contains("masculine_coded_words") || content.contains("bias_score") || content.contains("status"));
+        } else {
+            org.junit.jupiter.api.Assertions.assertTrue(mvcResult.getResponse().getContentAsString().contains("SERVICE_UNAVAILABLE"));
+        }
     }
 }

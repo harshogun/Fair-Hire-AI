@@ -17,7 +17,7 @@ globalThis.localStorage = {
   clear: () => mockStore.clear()
 };
 
-test('Authentication: Initial unauthenticated state', async (t) => {
+test('Authentication: Initial unauthenticated state', async () => {
   localStorage.clear();
   assert.equal(getAuthToken(), null, 'Unauthenticated token must be null');
   assert.equal(getStoredUser(), null, 'Unauthenticated user must be null');
@@ -27,7 +27,7 @@ test('Authentication: Initial unauthenticated state', async (t) => {
   assert.equal(headers['X-Department'], 'Engineering', 'Default department should be Engineering');
 });
 
-test('Authentication: Session storage and authenticated headers', async (t) => {
+test('Authentication: Session storage and authenticated headers', async () => {
   localStorage.clear();
   const testToken = 'eyJhbGciOiJIUzUxMiJ9.test.demo.token';
   const testUser = { id: 1, name: 'Lead Recruiter', email: 'recruiter@fairhire.ai', role: 'RECRUITER', department: 'Engineering' };
@@ -43,7 +43,7 @@ test('Authentication: Session storage and authenticated headers', async (t) => {
   assert.equal(headers['X-Department'], 'Engineering', 'Department should match user department');
 });
 
-test('Authentication: Logout completely purges session credentials', async (t) => {
+test('Authentication: Logout completely purges session credentials', async () => {
   localStorage.setItem('fairhire_jwt_token', 'temporary.token');
   localStorage.setItem('fairhire_user', JSON.stringify({ name: 'Temp' }));
 
@@ -58,7 +58,7 @@ test('Authentication: Logout completely purges session credentials', async (t) =
   assert.equal(headers['Authorization'], undefined, 'No authorization header after logout');
 });
 
-test('Authentication: Login validation rejects missing parameters', async (t) => {
+test('Authentication: Login validation rejects missing parameters', async () => {
   await assert.rejects(
     async () => loginRecruiter('', 'password123'),
     { message: 'Please enter both email and password.' }
@@ -69,7 +69,7 @@ test('Authentication: Login validation rejects missing parameters', async (t) =>
   );
 });
 
-test('Authentication: Successful login parses response and persists session', async (t) => {
+test('Authentication: Successful login parses response and persists session', async () => {
   localStorage.clear();
   const mockToken = 'jwt.mock.token.from.backend';
   const mockUser = { id: 1, name: 'Lead Recruiter', email: 'recruiter@fairhire.ai', role: 'RECRUITER', department: 'Engineering' };
@@ -100,7 +100,7 @@ test('Authentication: Successful login parses response and persists session', as
   }
 });
 
-test('Authentication: Failed login raises backend error message', async (t) => {
+test('Authentication: Failed login raises backend error message', async () => {
   localStorage.clear();
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => ({

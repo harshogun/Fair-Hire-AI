@@ -14,8 +14,10 @@ compared. This module is the Job-Description Bias Detection module
 referenced in the FairHire AI research gap.
 """
 
-import re
-from config import MASCULINE_CODED_WORDS, FEMININE_CODED_WORDS, AGE_CODED_WORDS
+try:
+    from app.core.config import MASCULINE_CODED_WORDS, FEMININE_CODED_WORDS, AGE_CODED_WORDS
+except ImportError:
+    from config import MASCULINE_CODED_WORDS, FEMININE_CODED_WORDS, AGE_CODED_WORDS
 
 
 def _find_flags(text, word_bank):

@@ -52,6 +52,8 @@ public class DeterministicSkillExtractor {
         }
     }
 
+    private final Map<Integer, List<CompiledSkillRule>> rulesCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * Extract canonical skills from parsed resume text using active taxonomy skills.
      *
@@ -64,8 +66,9 @@ public class DeterministicSkillExtractor {
             return Collections.emptyList();
         }
 
-        // 1. Build and compile extraction rules sorted by length descending (longest first)
-        List<CompiledSkillRule> rules = buildCompiledRules(activeSkills);
+        // 1. Retrieve or compile extraction rules sorted by length descending (longest first)
+        int taxonomyKey = activeSkills.hashCode();
+        List<CompiledSkillRule> rules = rulesCache.computeIfAbsent(taxonomyKey, k -> buildCompiledRules(activeSkills));
 
         BitSet occupiedBits = new BitSet(rawText.length());
         List<ExtractedSkillCandidate> rawCandidates = new ArrayList<>();

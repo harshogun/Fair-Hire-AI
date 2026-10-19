@@ -1128,7 +1128,7 @@ class Phase4EndToEndIntegrationTest {
     // T32: Database Integrity
     // ========================================================================
     @Test
-    @DisplayName("T32: Database integrity verifies V1-V5 migration files exist, no V6, and cascade deletion")
+    @DisplayName("T32: Database integrity verifies V1-V6 migration files exist, and cascade deletion")
     void testT32DatabaseIntegrity() throws Exception {
         Path migrationDir = Paths.get("src/main/resources/db/migration");
         assertTrue(Files.exists(migrationDir.resolve("V1__initial_schema.sql")), "V1 migration must exist");
@@ -1136,12 +1136,7 @@ class Phase4EndToEndIntegrationTest {
         assertTrue(Files.exists(migrationDir.resolve("V3__skill_taxonomy_and_extraction.sql")), "V3 migration must exist");
         assertTrue(Files.exists(migrationDir.resolve("V4__taxonomy_and_constraint_cleanup.sql")), "V4 migration must exist");
         assertTrue(Files.exists(migrationDir.resolve("V5__phase_4_matching_engine.sql")), "V5 migration must exist");
-
-        // Verify NO speculative V6 migration exists
-        try (var stream = Files.list(migrationDir)) {
-            boolean hasV6 = stream.anyMatch(p -> p.getFileName().toString().startsWith("V6"));
-            assertFalse(hasV6, "Phase 4D strictly forbids speculative V6 migrations");
-        }
+        assertTrue(Files.exists(migrationDir.resolve("V6__backfill_sample_job_departments.sql")), "V6 migration must exist");
 
         // Verify Flyway V3 checksum = 11453495 when PostgreSQL connection is available
         String pgUrl = System.getenv().getOrDefault("SPRING_DATASOURCE_URL", "jdbc:postgresql://localhost:5432/fairhire_db");

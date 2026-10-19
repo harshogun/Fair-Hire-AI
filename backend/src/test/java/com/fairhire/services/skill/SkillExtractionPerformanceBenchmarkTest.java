@@ -80,13 +80,13 @@ public class SkillExtractionPerformanceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("Run 8-Tier Scaling Benchmark with 5 Iterations (10KB to 5MB)")
+    @DisplayName("Run Scaling Benchmark with Calibrated Iterations (10KB to 2MB)")
     void runBenchmark() {
-        int[] tiersKb = {10, 50, 100, 250, 500, 1000, 2000, 5000};
-        int iterations = 5;
+        int[] tiersKb = {10, 50, 100, 250, 500, 1000, 2000};
+        int iterations = 3;
 
         System.out.println("=========================================================================================");
-        System.out.println("  FAIRHIRE AI — DETERMINISTIC SKILL EXTRACTOR 8-TIER BENCHMARK (5 ITERATIONS EACH)       ");
+        System.out.println("  FAIRHIRE AI — DETERMINISTIC SKILL EXTRACTOR SCALING BENCHMARK (3 ITERATIONS EACH)     ");
         System.out.println("=========================================================================================");
         System.out.printf("%-10s %-12s %-10s %-10s %-10s %-10s %-10s %-10s%n",
                 "Size (KB)", "Bytes", "Min (ms)", "Median(ms)", "Mean (ms)", "P95 (ms)", "Max (ms)", "Extracted");

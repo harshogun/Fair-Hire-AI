@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react"
 import { Navbar } from "./components/Navbar"
-import { LandingPage } from "./components/LandingPage"
 import { ScreeningStudio } from "./components/ScreeningStudio"
 import { ResultsDashboard } from "./components/ResultsDashboard"
 import { AuditHistory } from "./components/AuditHistory"
@@ -60,7 +59,29 @@ export function App() {
     return typeof window !== "undefined" ? window.location.pathname : "/candidate"
   })
   const [currentRunId, setCurrentRunId] = useState(null)
-  const [prefilledSampleIndex, setPrefilledSampleIndex] = useState(null)
+
+  // HTML5 History router navigation
+  const navigate = (to, { replace = false } = {}) => {
+    let target = to
+    // Legacy view string translation
+    if (to === "login") target = "/login"
+    else if (to === "candidate") target = "/candidate"
+    else if (to === "recruiter") target = "/recruiter"
+    else if (to === "history") target = "/recruiter/audit"
+    else if (to === "admin") target = "/admin/research"
+    else if (to === "architecture") target = "/architecture"
+    else if (to === "studio") target = "/studio"
+    else if (to === "results") target = "/results"
+    else if (to === "landing") target = "/candidate"
+
+    if (replace) {
+      window.history.replaceState({}, "", target)
+    } else {
+      window.history.pushState({}, "", target)
+    }
+    setCurrentPath(window.location.pathname)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   // Listen to browser Back/Forward (popstate)
   useEffect(() => {
@@ -104,29 +125,6 @@ export function App() {
 
   const toggleTheme = () => {
     setTheme(prev => prev === "dark" ? "light" : "dark")
-  }
-
-  // HTML5 History router navigation
-  const navigate = (to, { replace = false } = {}) => {
-    let target = to
-    // Legacy view string translation
-    if (to === "login") target = "/login"
-    else if (to === "candidate") target = "/candidate"
-    else if (to === "recruiter") target = "/recruiter"
-    else if (to === "history") target = "/recruiter/audit"
-    else if (to === "admin") target = "/admin/research"
-    else if (to === "architecture") target = "/architecture"
-    else if (to === "studio") target = "/studio"
-    else if (to === "results") target = "/results"
-    else if (to === "landing") target = "/candidate"
-
-    if (replace) {
-      window.history.replaceState({}, "", target)
-    } else {
-      window.history.pushState({}, "", target)
-    }
-    setCurrentPath(window.location.pathname)
-    window.scrollTo({ top: 0, behavior: "smooth" })
   }
 
   const currentRoute = parseRoute(currentPath)

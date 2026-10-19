@@ -13,11 +13,21 @@ import java.util.Map;
 @Component
 public class JwtUtils {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(JwtUtils.class);
+    private static final String DEFAULT_DEV_SECRET = "fairhire-ai-secret-key-2026-research-edition-spring-boot-jwt-token-key-32chars";
+
     @Value("${jwt.secret:fairhire-ai-secret-key-2026-research-edition-spring-boot-jwt-token-key-32chars}")
     private String jwtSecret;
 
     @Value("${jwt.expiration-hours:24}")
     private int expirationHours;
+
+    @jakarta.annotation.PostConstruct
+    public void validateSecret() {
+        if (DEFAULT_DEV_SECRET.equals(jwtSecret)) {
+            log.warn("SECURITY WARNING: Using default hardcoded JWT secret! For deployed production environments, supply a secure random 256-bit key via the JWT_SECRET environment variable.");
+        }
+    }
 
     private Key getSigningKey() {
         byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);

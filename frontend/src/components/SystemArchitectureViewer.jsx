@@ -1,14 +1,11 @@
 import React, { useState } from "react"
 import {
   Layers,
-  Cpu,
   Database,
   ArrowRight,
-  ShieldCheck,
   CheckCircle2,
   Users,
   Code,
-  FileCode,
   Network
 } from "lucide-react"
 

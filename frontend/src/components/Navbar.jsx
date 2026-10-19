@@ -18,7 +18,7 @@ export function Navbar({
   onNavigate,
   activeView, 
   setActiveView, 
-  onNewScreening, 
+  _onNewScreening, 
   theme, 
   toggleTheme,
   isAuthenticated,

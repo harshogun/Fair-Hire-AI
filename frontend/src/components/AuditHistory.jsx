@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react"
-import { Search, Download, Trash2, ArrowRight, History, Award, Plus, FileSpreadsheet, AlertCircle } from "lucide-react"
+import React, { useState, useEffect, useCallback } from "react"
+import { Search, Trash2, ArrowRight, History, Plus, FileSpreadsheet, AlertCircle } from "lucide-react"
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
@@ -11,7 +11,7 @@ export function AuditHistory({ onSelectRun, setActiveView }) {
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState(null)
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     setIsLoading(true)
     setErrorMessage(null)
     try {
@@ -31,10 +31,36 @@ export function AuditHistory({ onSelectRun, setActiveView }) {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    fetchHistory()
+    let ignore = false
+    fetchAuditHistory()
+      .then(data => {
+        if (!ignore) {
+          if (Array.isArray(data)) {
+            setRuns(data)
+          } else {
+            setRuns([])
+            if (data && (data.error || data.message)) {
+              setErrorMessage(data.error || data.message)
+            }
+          }
+        }
+      })
+      .catch(err => {
+        if (!ignore) {
+          console.error("Audit history fetch error:", err)
+          setErrorMessage(err.message || "Failed to load audit history from ledger.")
+          setRuns([])
+        }
+      })
+      .finally(() => {
+        if (!ignore) setIsLoading(false)
+      })
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleDelete = async (id, title) => {
