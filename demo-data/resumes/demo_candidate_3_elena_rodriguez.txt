@@ -1,0 +1,28 @@
+[SYNTHETIC DEMO CANDIDATE PROFILE - GENERATED FOR FAIRHIRE AI DEMONSTRATION ONLY]
+Name: Elena Rodriguez
+Email: elena.rodriguez@demo.fairhire.ai
+Title: Full-Stack React & Node.js Developer
+
+Professional Summary:
+Full-Stack Web Developer with 4 years of experience building responsive client applications and resilient backend services. Proficient in JavaScript, TypeScript, React, Node.js, REST API design, and SQL data modeling.
+
+Core Technical Competencies:
+- Frontend Engineering: React, JavaScript, TypeScript, Vue.js
+- Backend Frameworks: Node.js, Express, REST API, GraphQL
+- Databases & Querying: SQL, PostgreSQL, MongoDB
+- Cloud & Infrastructure: Docker, Git, Linux
+
+Professional Experience:
+Full-Stack Engineer | Apex Interactive (2022 - Present)
+- Developed enterprise web portals using React and TypeScript with component-driven state architecture.
+- Engineered microservices using Node.js and REST APIs handling 5,000 requests per minute.
+- Authored complex SQL queries and normalized schemas for PostgreSQL databases.
+- Automated code reviews and testing pipelines using Git and Docker.
+
+Frontend Developer | PixelCraft Labs (2020 - 2022)
+- Built interactive dashboard user interfaces with React and JavaScript.
+- Integrated third-party REST API endpoints and GraphQL schemas.
+- Collaborated in cross-functional agile sprints with designers and product managers.
+
+Education:
+B.S. in Software Engineering | University of Texas at Austin

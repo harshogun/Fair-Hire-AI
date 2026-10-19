@@ -26,6 +26,9 @@ public interface MatchResultRepository extends JpaRepository<MatchResult, Long> 
 
     Optional<MatchResult> findByJobIdAndResumeIdAndMatchingMethod(Long jobId, Long resumeId, MatchingMethod matchingMethod);
 
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT m.resume.id FROM MatchResult m WHERE m.job.id = :jobId ORDER BY m.resume.id ASC")
+    List<Long> findDistinctResumeIdsByJobId(@org.springframework.data.repository.query.Param("jobId") Long jobId);
+
     @org.springframework.transaction.annotation.Transactional
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
     @org.springframework.data.jpa.repository.Query("UPDATE MatchResult m SET m.isStale = true WHERE m.job.id = :jobId")

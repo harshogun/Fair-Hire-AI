@@ -50,16 +50,34 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(customAuthenticationEntryPoint())
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json");
+                            response.getWriter().write("{\"status\":403,\"error\":\"FORBIDDEN\",\"message\":\"Access denied: Insufficient role permissions for this resource.\"}");
+                        })
                 )
                 .authorizeHttpRequests(auth -> auth
                         // Public endpoints
                         .requestMatchers(
                                 "/api/auth/**",
+                                "/api/v1/auth/**",
                                 "/api/health/**",
                                 "/api/v1/health/**",
+                                "/api/jobs/*/self-screen/**",
+                                "/api/v1/jobs/*/self-screen/**",
                                 "/h2-console/**",
                                 "/error"
                         ).permitAll()
+                        // Research / Admin endpoints - STRICT ADMIN ROLE REQUIRED
+                        .requestMatchers(
+                                "/api/reports/**",
+                                "/api/v1/reports/**"
+                        ).hasRole("ADMIN")
+                        // Audit history endpoints - AUTHENTICATED ACCESS REQUIRED
+                        .requestMatchers(
+                                "/api/history/**",
+                                "/api/v1/history/**"
+                        ).authenticated()
                         // Phase 4 matching endpoints - STRICT AUTHENTICATION REQUIRED
                         .requestMatchers(
                                 "/api/v1/jobs/*/matches",

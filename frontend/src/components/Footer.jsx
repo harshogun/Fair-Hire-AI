@@ -31,18 +31,23 @@ export function Footer({ setActiveView }) {
           <h4 className="font-heading text-xs font-bold text-slate-900 dark:text-slate-200 uppercase tracking-widest mb-4">Platform Navigation</h4>
           <ul className="space-y-2.5 text-xs">
             <li>
-              <button onClick={() => setActiveView("landing")} className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
-                <span>Platform Overview &amp; Live Scanner</span>
+              <button onClick={() => setActiveView("/candidate")} className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
+                <span>Candidate Portal &amp; Skill Fit</span>
               </button>
             </li>
             <li>
-              <button onClick={() => setActiveView("studio")} className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
-                <span>Screening Studio Workbench</span>
+              <button onClick={() => setActiveView("/recruiter")} className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
+                <span>Recruiter Studio &amp; Job Requisitions</span>
               </button>
             </li>
             <li>
-              <button onClick={() => setActiveView("history")} className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
-                <span>Audit History Ledger &amp; CSV Export</span>
+              <button onClick={() => setActiveView("/recruiter/audit")} className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
+                <span>Audit History Ledger &amp; Export</span>
+              </button>
+            </li>
+            <li>
+              <button onClick={() => setActiveView("/architecture")} className="text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
+                <span>System Architecture Documentation</span>
               </button>
             </li>
           </ul>

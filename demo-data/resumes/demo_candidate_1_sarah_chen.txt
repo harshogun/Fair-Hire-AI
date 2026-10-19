@@ -1,0 +1,29 @@
+[SYNTHETIC DEMO CANDIDATE PROFILE - GENERATED FOR FAIRHIRE AI DEMONSTRATION ONLY]
+Name: Sarah Chen
+Email: sarah.chen@demo.fairhire.ai
+Title: Senior Python & Cloud Backend Architect
+
+Professional Summary:
+Backend Software Engineer with 6+ years of experience designing high-throughput distributed systems and RESTful APIs. Expertise in Python, Django, FastAPI, PostgreSQL, and Docker containerization. Proven track record leading cloud migrations to AWS and establishing robust CI/CD pipelines with Git.
+
+Core Technical Competencies:
+- Programming Languages: Python, SQL, C++
+- Frameworks & Libraries: Django, FastAPI, REST API
+- Cloud & Infrastructure: Docker, Kubernetes, AWS, Linux
+- Databases & Storage: PostgreSQL, Redis
+- Tools & Version Control: Git
+
+Professional Experience:
+Senior Backend Engineer | CloudScale Systems (2022 - Present)
+- Architected and deployed microservices handling 25,000+ RPM using Python, FastAPI, and PostgreSQL.
+- Containerized legacy services with Docker and orchestrated deployment via Kubernetes on AWS.
+- Designed REST APIs for secure third-party integrations with sub-50ms latency.
+- Enforced strict code quality, automated testing, and CI/CD workflows using Git.
+
+Software Engineer | NexaTech Solutions (2019 - 2022)
+- Built scalable web applications with Python, Django, and PostgreSQL.
+- Optimized slow SQL queries, reducing database load by 35%.
+- Implemented asynchronous background task queues using Redis.
+
+Education:
+B.S. in Computer Science | University of California, Berkeley

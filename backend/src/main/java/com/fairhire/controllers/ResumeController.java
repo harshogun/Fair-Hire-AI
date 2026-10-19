@@ -3,6 +3,8 @@ package com.fairhire.controllers;
 import com.fairhire.dto.ExtractedSkillDto;
 import com.fairhire.dto.ResumeUploadResponse;
 import com.fairhire.services.ResumeService;
+import com.fairhire.services.matching.ResourceNotFoundException;
+import com.fairhire.services.matching.UnauthorizedResourceAccessException;
 import com.fairhire.services.parser.DuplicateResumeException;
 import com.fairhire.services.parser.InvalidResumeUploadException;
 import com.fairhire.services.skill.SkillExtractionService;
@@ -37,6 +39,7 @@ public class ResumeController {
     @PostMapping(consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadResume(
             @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "jobId", required = false) Long jobId,
             @RequestParam(value = "candidateId", required = false) Long candidateId,
             @RequestParam(value = "name", required = false) String name,
             @RequestParam(value = "email", required = false) String email
@@ -47,7 +50,7 @@ public class ResumeController {
                         "error", "File parameter is required and cannot be empty."
                 ));
             }
-            ResumeUploadResponse response = resumeService.ingestResume(file, candidateId, name, email);
+            ResumeUploadResponse response = resumeService.ingestResume(file, jobId, candidateId, name, email);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (InvalidResumeUploadException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
@@ -60,6 +63,16 @@ public class ResumeController {
                     "detail", e.getMessage(),
                     "sha256", e.getSha256(),
                     "existingResumeId", e.getExistingResumeId()
+            ));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                    "error", "RESOURCE_NOT_FOUND",
+                    "detail", e.getMessage()
+            ));
+        } catch (UnauthorizedResourceAccessException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "error", "UNAUTHORIZED_RESOURCE_ACCESS",
+                    "detail", e.getMessage()
             ));
         } catch (IOException e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
@@ -78,17 +91,25 @@ public class ResumeController {
      * Ingest raw text resume via application/json.
      */
     @PostMapping(consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> uploadResumeJson(@RequestBody Map<String, String> jsonBody) {
+    public ResponseEntity<?> uploadResumeJson(@RequestBody Map<String, Object> jsonBody) {
         try {
-            if (jsonBody == null || !jsonBody.containsKey("raw_text") || jsonBody.get("raw_text").isBlank()) {
+            if (jsonBody == null || !jsonBody.containsKey("raw_text") || String.valueOf(jsonBody.get("raw_text")).isBlank()) {
                 return ResponseEntity.badRequest().body(Map.of(
                         "error", "The 'raw_text' property is required in JSON payload."
                 ));
             }
+            Long jobId = null;
+            if (jsonBody.containsKey("jobId") && jsonBody.get("jobId") != null && !String.valueOf(jsonBody.get("jobId")).isBlank()) {
+                jobId = Long.valueOf(String.valueOf(jsonBody.get("jobId")).trim());
+            } else if (jsonBody.containsKey("job_id") && jsonBody.get("job_id") != null && !String.valueOf(jsonBody.get("job_id")).isBlank()) {
+                jobId = Long.valueOf(String.valueOf(jsonBody.get("job_id")).trim());
+            }
+
             ResumeUploadResponse response = resumeService.ingestRawText(
-                    jsonBody.get("raw_text"),
-                    jsonBody.get("name"),
-                    jsonBody.get("email")
+                    String.valueOf(jsonBody.get("raw_text")),
+                    jobId,
+                    jsonBody.get("name") != null ? String.valueOf(jsonBody.get("name")) : null,
+                    jsonBody.get("email") != null ? String.valueOf(jsonBody.get("email")) : null
             );
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (InvalidResumeUploadException e) {
@@ -102,6 +123,16 @@ public class ResumeController {
                     "detail", e.getMessage(),
                     "sha256", e.getSha256(),
                     "existingResumeId", e.getExistingResumeId()
+            ));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                    "error", "RESOURCE_NOT_FOUND",
+                    "detail", e.getMessage()
+            ));
+        } catch (UnauthorizedResourceAccessException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+                    "error", "UNAUTHORIZED_RESOURCE_ACCESS",
+                    "detail", e.getMessage()
             ));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
@@ -192,5 +223,17 @@ public class ResumeController {
                     "error", e.getMessage()
             ));
         }
+    }
+
+    /**
+     * Handle oversized multipart upload rejections with HTTP 413 Payload Too Large.
+     */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<?> handleMaxUploadSizeExceeded(org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of(
+                "status", 413,
+                "error", "PAYLOAD_TOO_LARGE",
+                "message", "Upload rejected: File size exceeds the maximum permitted limit of 10MB."
+        ));
     }
 }

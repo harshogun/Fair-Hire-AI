@@ -22,7 +22,7 @@ public class Job {
     private String title;
 
     @Column(length = 100)
-    private String department;
+    private String department = "Engineering";
 
     @Column(length = 150)
     private String location;
@@ -64,6 +64,7 @@ public class Job {
         this.title = title;
         this.rawDescription = rawDescription;
         this.creator = creator;
+        this.department = "Engineering";
         this.status = JobStatus.ACTIVE;
         this.createdAt = Instant.now();
         this.updatedAt = Instant.now();
@@ -72,7 +73,7 @@ public class Job {
     public Job(String title, String rawDescription, String department, User creator) {
         this.title = title;
         this.rawDescription = rawDescription;
-        this.department = department;
+        this.department = (department != null && !department.isBlank()) ? department.trim() : "Engineering";
         this.creator = creator;
         this.status = JobStatus.ACTIVE;
         this.createdAt = Instant.now();
@@ -84,6 +85,7 @@ public class Job {
         if (createdAt == null) createdAt = Instant.now();
         if (updatedAt == null) updatedAt = Instant.now();
         if (status == null) status = JobStatus.ACTIVE;
+        if (department == null || department.isBlank()) department = "Engineering";
     }
 
     @PreUpdate
@@ -104,7 +106,9 @@ public class Job {
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
 
-    public String getDepartment() { return department; }
+    public String getDepartment() {
+        return (department != null && !department.isBlank()) ? department : "unassigned";
+    }
     public void setDepartment(String department) { this.department = department; }
 
     public String getLocation() { return location; }

@@ -1,0 +1,23 @@
+[
+  {
+    "id_label": "DEMO-JOB-01",
+    "title": "Senior Cloud Backend Engineer",
+    "department": "Engineering",
+    "description": "Seeking an experienced backend engineer to architect distributed cloud services. Responsible for high-availability systems, REST API development, containerization, and data persistence.",
+    "requirements": "Python, SQL, REST APIs, Docker, AWS, Git"
+  },
+  {
+    "id_label": "DEMO-JOB-02",
+    "title": "DevOps & Infrastructure Automation Engineer",
+    "department": "Engineering",
+    "description": "Looking for a DevOps engineer to lead our infrastructure orchestration, CI/CD pipeline automation, and multi-cloud environment reliability.",
+    "requirements": "Docker, Kubernetes, AWS, Linux, Git, Python"
+  },
+  {
+    "id_label": "DEMO-JOB-03",
+    "title": "Full Stack Platform Developer",
+    "department": "Engineering",
+    "description": "We are looking for a full stack engineer passionate about modern frontend user experiences and scalable backend services.",
+    "requirements": "React, TypeScript, Node.js, REST APIs, SQL, Git"
+  }
+]

@@ -33,9 +33,10 @@ public class AuthService {
         userRepository.save(user);
 
         String roleStr = user.getRole() != null ? user.getRole().name() : "RECRUITER";
-        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), roleStr);
+        String department = "Engineering";
+        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), roleStr, department);
         return Map.of(
-                "user", Map.of("id", user.getId(), "name", user.getName(), "email", user.getEmail(), "role", roleStr),
+                "user", Map.of("id", user.getId(), "name", user.getName(), "email", user.getEmail(), "role", roleStr, "department", department),
                 "token", token
         );
     }
@@ -49,9 +50,10 @@ public class AuthService {
 
         User user = userOpt.get();
         String roleStr = user.getRole() != null ? user.getRole().name() : "RECRUITER";
-        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), roleStr);
+        String department = "Engineering";
+        String token = jwtUtils.generateToken(user.getId(), user.getEmail(), roleStr, department);
         return Map.of(
-                "user", Map.of("id", user.getId(), "name", user.getName(), "email", user.getEmail(), "role", roleStr),
+                "user", Map.of("id", user.getId(), "name", user.getName(), "email", user.getEmail(), "role", roleStr, "department", department),
                 "token", token
         );
     }
@@ -70,6 +72,6 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found."));
 
         String roleStr = user.getRole() != null ? user.getRole().name() : "RECRUITER";
-        return Map.of("id", user.getId(), "name", user.getName(), "email", user.getEmail(), "role", roleStr);
+        return Map.of("id", user.getId(), "name", user.getName(), "email", user.getEmail(), "role", roleStr, "department", "Engineering");
     }
 }

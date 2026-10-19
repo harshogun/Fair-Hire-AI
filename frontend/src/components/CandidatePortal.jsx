@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from "react"
 import { UserCheck, FileUp, Sparkles, CheckCircle2, AlertCircle, ArrowRight, BookOpen, Briefcase } from "lucide-react"
+import {
+  fetchJobs as apiFetchJobs,
+  uploadResume as apiUploadResume,
+  selfScreenCandidate as apiSelfScreenCandidate,
+  getStoredUser,
+  MAX_RESUME_FILE_SIZE_BYTES
+} from "../services/api"
 
-export function CandidatePortal() {
+export function CandidatePortal({ onNavigate }) {
   const [jobs, setJobs] = useState([])
   const [selectedJobId, setSelectedJobId] = useState("")
   const [candidateName, setCandidateName] = useState("")
@@ -11,18 +18,34 @@ export function CandidatePortal() {
   const [evaluating, setEvaluating] = useState(false)
   const [matchResult, setMatchResult] = useState(null)
   const [errorMsg, setErrorMsg] = useState(null)
+  const currentUser = getStoredUser()
+  const isRecruiter = !!currentUser
 
   useEffect(() => {
-    fetch("/api/jobs")
-      .then(res => res.json())
+    apiFetchJobs()
       .then(data => {
         if (Array.isArray(data)) {
           setJobs(data)
           if (data.length > 0) setSelectedJobId(data[0].id)
         }
       })
-      .catch(err => console.error(err))
+      .catch(err => {
+        console.error(err)
+        setErrorMsg("Failed to load jobs list: " + err.message)
+      })
   }, [])
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0] || null
+    if (file && file.size > MAX_RESUME_FILE_SIZE_BYTES) {
+      setErrorMsg(`Selected file (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the maximum allowed limit of 10 MB.`)
+      e.target.value = ""
+      setUploadFile(null)
+      return
+    }
+    setErrorMsg(null)
+    setUploadFile(file)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -35,56 +58,40 @@ export function CandidatePortal() {
     setMatchResult(null)
 
     try {
-      // 1. Upload/parse resume
-      let parseRes
-      if (uploadFile) {
-        const formData = new FormData()
-        formData.append("file", uploadFile)
-        if (candidateName) formData.append("name", candidateName)
-        if (candidateEmail) formData.append("email", candidateEmail)
-        parseRes = await fetch("/api/resumes", {
-          method: "POST",
-          body: formData
+      // 1. Upload/parse resume via typed API helper without jobId
+      // (Candidate self-screening is completely decoupled from recruiter applicant pools)
+      let parseData
+      try {
+        parseData = await apiUploadResume({
+          file: uploadFile,
+          rawText: resumeText,
+          name: candidateName || "Job Applicant",
+          email: candidateEmail || "applicant@example.com"
         })
-      } else if (resumeText.trim()) {
-        parseRes = await fetch("/api/resumes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            raw_text: resumeText,
-            name: candidateName || "Job Applicant",
-            email: candidateEmail || "applicant@example.com"
-          })
-        })
-      } else {
-        setErrorMsg("Please provide a resume document or paste your resume text.")
+      } catch (uploadErr) {
+        setErrorMsg("Resume upload/parsing failed: " + uploadErr.message)
         setEvaluating(false)
         return
       }
 
-      if (!parseRes.ok) {
-        const err = await parseRes.json()
-        setErrorMsg(err.error || "Failed to parse resume.")
+      const resumeId = parseData.resumeId || parseData.resume?.id || parseData.id
+      if (!resumeId) {
+        setErrorMsg("Unable to retrieve parsed resume identifier for evaluation.")
         setEvaluating(false)
         return
       }
 
-      const parseData = await parseRes.json()
-      const resume = parseData.resume
-
-      // 2. Run matching for the chosen job to calculate scorecard
-      await fetch(`/api/matching/${selectedJobId}`, { method: "POST" })
-      const resultsRes = await fetch(`/api/matching/${selectedJobId}/results`)
-      const resultsData = await resultsRes.json()
-
-      const found = resultsData.results?.find(r => r.resume_id === resume.id)
-      if (found) {
-        setMatchResult(found)
-      } else if (resultsData.results?.length > 0) {
-        setMatchResult(resultsData.results[0])
+      // 2. Run transparent, read-only candidate self-screening
+      try {
+        const scorecard = await apiSelfScreenCandidate(selectedJobId, resumeId)
+        setMatchResult(scorecard)
+      } catch (selfScreenErr) {
+        console.warn("Candidate self-screening notice:", selfScreenErr)
+        setErrorMsg("Candidate self-screening error: " + selfScreenErr.message)
       }
     } catch (err) {
-      setErrorMsg("Network error connecting to evaluation service.")
+      console.error("Evaluation error:", err)
+      setErrorMsg("Network error connecting to evaluation service: " + err.message)
     } finally {
       setEvaluating(false)
     }
@@ -94,6 +101,25 @@ export function CandidatePortal() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      {/* Recruiter Preview Mode Notice */}
+      {isRecruiter && (
+        <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            <span>
+              <strong>Recruiter Preview Mode:</strong> You are viewing the public Candidate Self-Screening Portal. Submissions here are private ATS fit reviews for job seekers and are not added to your requisition applicant pool.
+            </span>
+          </div>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate("/recruiter")}
+              className="ml-3 px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-semibold shrink-0 cursor-pointer text-[11px] transition-colors"
+            >
+              Return to Studio
+            </button>
+          )}
+        </div>
+      )}
       {/* Header */}
       <div className="text-center max-w-2xl mx-auto space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">
@@ -168,7 +194,7 @@ export function CandidatePortal() {
               <input
                 type="file"
                 accept=".pdf,.docx,.txt"
-                onChange={(e) => setUploadFile(e.target.files[0] || null)}
+                onChange={handleFileChange}
                 className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
               />
             </div>
@@ -215,32 +241,47 @@ export function CandidatePortal() {
                 </span>
               </div>
 
-              <div className="text-center py-2 space-y-1">
-                <div className="text-4xl font-extrabold font-heading text-indigo-600 dark:text-indigo-400">
-                  {(matchResult.final_score * 100).toFixed(0)}%
-                </div>
-                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                  Overall Composite Match Score
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Based on keyword ATS skills and S-BERT semantic similarity.
-                </p>
-              </div>
+              {(() => {
+                const finalRaw = matchResult.final_score != null ? Number(matchResult.final_score) : (matchResult.overall_score != null ? Number(matchResult.overall_score) : 0);
+                const finalPct = finalRaw > 1.0 ? finalRaw : finalRaw * 100;
 
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
-                  <div className="text-lg font-bold text-amber-500">
-                    {(matchResult.keyword_score * 100).toFixed(0)}%
-                  </div>
-                  <div className="text-[10px] text-slate-500 uppercase font-semibold">Keyword ATS</div>
-                </div>
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
-                  <div className="text-lg font-bold text-indigo-500">
-                    {(matchResult.semantic_score * 100).toFixed(0)}%
-                  </div>
-                  <div className="text-[10px] text-slate-500 uppercase font-semibold">Semantic Fit</div>
-                </div>
-              </div>
+                const kwRaw = matchResult.keyword_score != null ? Number(matchResult.keyword_score) : (matchResult.required_skill_coverage != null ? Number(matchResult.required_skill_coverage) : 0);
+                const kwPct = kwRaw <= 1.0 ? kwRaw * 100 : kwRaw;
+
+                const semRaw = matchResult.semantic_score != null ? Number(matchResult.semantic_score) : (matchResult.preferred_skill_coverage != null ? Number(matchResult.preferred_skill_coverage) : 0);
+                const semPct = semRaw <= 1.0 ? semRaw * 100 : semRaw;
+
+                return (
+                  <>
+                    <div className="text-center py-2 space-y-1">
+                      <div className="text-4xl font-extrabold font-heading text-indigo-600 dark:text-indigo-400">
+                        {finalPct.toFixed(0)}%
+                      </div>
+                      <div className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                        Overall Match Score
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Evaluated with deterministic canonical skill coverage.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 text-center">
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
+                        <div className="text-lg font-bold text-amber-500">
+                          {kwPct.toFixed(0)}%
+                        </div>
+                        <div className="text-[10px] text-slate-500 uppercase font-semibold">Required Skills</div>
+                      </div>
+                      <div className="p-3 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
+                        <div className="text-lg font-bold text-indigo-500">
+                          {semPct.toFixed(0)}%
+                        </div>
+                        <div className="text-[10px] text-slate-500 uppercase font-semibold">Preferred Skills</div>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
 
               {/* Matched Skills */}
               <div className="space-y-2">

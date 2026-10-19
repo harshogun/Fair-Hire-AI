@@ -10,12 +10,22 @@ import {
   Plus,
   RefreshCw,
   FileUp,
-  X
+  X,
+  AlertCircle
 } from "lucide-react"
+import {
+  fetchJobs as apiFetchJobs,
+  createJob as apiCreateJob,
+  fetchResumes as apiFetchResumes,
+  uploadResume as apiUploadResume,
+  runJobMatches as apiRunJobMatches,
+  fetchJobMatches as apiFetchJobMatches,
+  MAX_RESUME_FILE_SIZE_BYTES
+} from "../services/api"
 
-export function RecruiterDashboard({ onOpenLegacyStudio }) {
+export function RecruiterDashboard({ onOpenLegacyStudio, initialJobId, onSelectJob }) {
   const [jobs, setJobs] = useState([])
-  const [selectedJobId, setSelectedJobId] = useState(null)
+  const [selectedJobId, setSelectedJobId] = useState(() => initialJobId ? Number(initialJobId) : null)
   const [selectedJob, setSelectedJob] = useState(null)
   const [resumes, setResumes] = useState([])
   const [matchResults, setMatchResults] = useState([])
@@ -23,9 +33,16 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
   const [biasReport, setBiasReport] = useState(null)
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState("ranking") // ranking | blind | bias | rewrite | upload
+  const [errorBanner, setErrorBanner] = useState(null)
+
+  useEffect(() => {
+    if (initialJobId && Number(initialJobId) !== selectedJobId) {
+      setSelectedJobId(Number(initialJobId))
+    }
+  }, [initialJobId])
 
   // Configurable ATS Scoring Weights
-  const [keywordWeight, setKeywordWeight] = useState(30) // 30% keyword, 70% semantic
+  const [keywordWeight, setKeywordWeight] = useState(80) // Phase 4 canonical required skill coverage
 
   // Job Creation Modal State
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -48,23 +65,23 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
 
   const fetchJobs = async () => {
     try {
-      const res = await fetch("/api/jobs")
-      const data = await res.json()
+      const data = await apiFetchJobs()
       if (Array.isArray(data) && data.length > 0) {
         setJobs(data)
         if (!selectedJobId) {
-          setSelectedJobId(data[0].id)
+          const targetId = initialJobId ? Number(initialJobId) : data[0].id
+          setSelectedJobId(targetId)
         }
       }
     } catch (err) {
       console.error("Failed to load jobs:", err)
+      setErrorBanner("Failed to load jobs: " + err.message)
     }
   }
 
   const fetchResumes = async () => {
     try {
-      const res = await fetch("/api/resumes")
-      const data = await res.json()
+      const data = await apiFetchResumes()
       if (Array.isArray(data)) {
         setResumes(data)
       }
@@ -75,39 +92,71 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
 
   const loadJobDetails = async (jobId) => {
     setLoading(true)
+    setErrorBanner(null)
     try {
       // 1. Job details
       const jobRes = await fetch(`/api/jobs/${jobId}`)
-      const jobData = await jobRes.json()
-      setSelectedJob(jobData)
+      if (jobRes.ok) {
+        const jobData = await jobRes.json()
+        setSelectedJob(jobData)
+      }
 
-      // 2. Match results
-      const matchRes = await fetch(`/api/matching/${jobId}/results`)
-      const matchData = await matchRes.json()
-      setMatchResults(matchData?.results || [])
+      // 2. Deterministic match results via Phase 4 engine
+      try {
+        let matchData = await apiFetchJobMatches(jobId)
+        if (!matchData?.results || matchData.results.length === 0) {
+          const runData = await apiRunJobMatches(jobId, "NORMAL")
+          matchData = runData
+        }
+        setMatchResults(matchData?.results || [])
+      } catch (mErr) {
+        console.warn("Deterministic matching notice:", mErr)
+        setMatchResults([])
+      }
 
-      // 3. Blind screening comparison
-      const blindRes = await fetch(`/api/blind-screening/${jobId}`)
-      const bData = await blindRes.json()
-      setBlindData(bData)
+      // 3. Blind screening comparison (safe handling)
+      try {
+        const blindRes = await fetch(`/api/blind-screening/${jobId}`)
+        if (blindRes.ok) {
+          const bData = await blindRes.json()
+          setBlindData(bData)
+        } else {
+          setBlindData(null)
+        }
+      } catch (ignored) {
+        setBlindData(null)
+      }
 
-      // 4. Bias report
-      const biasRes = await fetch(`/api/bias/${jobId}`)
-      const biData = await biasRes.json()
-      setBiasReport(biData)
+      // 4. Bias report (safe handling)
+      try {
+        const biasRes = await fetch(`/api/bias/${jobId}`)
+        if (biasRes.ok) {
+          const biData = await biasRes.json()
+          setBiasReport(biData)
+        } else {
+          setBiasReport(null)
+        }
+      } catch (ignored) {
+        setBiasReport(null)
+      }
 
-      // 5. Pre-generate rewrite preview
-      if (jobData?.description) {
-        const rwRes = await fetch("/api/bias/rewrite", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: `${jobData.title}\n${jobData.description}\n${jobData.requirements || ""}` })
-        })
-        const rwData = await rwRes.json()
-        setRewriteData(rwData)
+      // 5. Pre-generate rewrite preview if AI service available
+      if (selectedJob?.description) {
+        try {
+          const rwRes = await fetch("/api/bias/rewrite", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: `${selectedJob.title}\n${selectedJob.description}\n${selectedJob.requirements || ""}` })
+          })
+          if (rwRes.ok) {
+            const rwData = await rwRes.json()
+            setRewriteData(rwData)
+          }
+        } catch (ignored) {}
       }
     } catch (err) {
       console.error("Failed to fetch job details:", err)
+      setErrorBanner("Error loading job details: " + err.message)
     } finally {
       setLoading(false)
     }
@@ -125,111 +174,96 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
     loadJobDetails(selectedJobId)
   }, [selectedJobId])
 
-  // Run/Re-calculate Matching with Weights
+  // Run/Re-calculate Matching with Phase 4 Deterministic Engine
   const handleRecalculateWeights = async () => {
     if (!selectedJobId) return
     setLoading(true)
+    setErrorBanner(null)
     try {
-      const kw = keywordWeight / 100
-      const sem = (100 - keywordWeight) / 100
-      const res = await fetch(`/api/matching/${selectedJobId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          keyword_weight: kw,
-          semantic_weight: sem
-        })
-      })
-      const data = await res.json()
-      setMatchResults(data.results || [])
-
-      // Refresh blind comparison
-      const blindRes = await fetch(`/api/blind-screening/${selectedJobId}`)
-      const bData = await blindRes.json()
-      setBlindData(bData)
+      const matchBatch = await apiRunJobMatches(selectedJobId, "NORMAL")
+      setMatchResults(matchBatch?.results || [])
     } catch (err) {
-      console.error("Failed to recalculate matching:", err)
+      console.error("Failed to run matching:", err)
+      setErrorBanner("Matching Error: " + err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  // Create Job
+  // Create Job with robust DTO contract handling
   const handleCreateJob = async (e) => {
     e.preventDefault()
     if (!newTitle.trim() || !newDescription.trim()) return
     setCreatingJob(true)
+    setErrorBanner(null)
     try {
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle,
-          description: newDescription,
-          requirements: newRequirements
-        })
+      const data = await apiCreateJob({
+        title: newTitle,
+        description: newDescription,
+        requirements: newRequirements
       })
-      const data = await res.json()
-      if (data.job) {
-        setJobs(prev => [data.job, ...prev])
-        setSelectedJobId(data.job.id)
+      const newJob = data.job || (data.id ? data : null)
+      if (newJob) {
+        setJobs(prev => [newJob, ...prev])
+        setSelectedJobId(newJob.id)
         setShowCreateModal(false)
         setNewTitle("")
         setNewDescription("")
         setNewRequirements("")
+        await loadJobDetails(newJob.id)
       }
     } catch (err) {
       console.error("Error creating job:", err)
+      setErrorBanner("Job Creation Failed: " + err.message)
     } finally {
       setCreatingJob(false)
     }
   }
 
-  // Upload Resume
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0] || null
+    if (file && file.size > MAX_RESUME_FILE_SIZE_BYTES) {
+      setUploadSuccess(`Upload Error: Selected file (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the 10 MB upload limit.`)
+      e.target.value = ""
+      setUploadFile(null)
+      return
+    }
+    setUploadSuccess(null)
+    setUploadFile(file)
+  }
+
+  // Upload Resume with robust DTO handling and feedback
   const handleUploadResume = async (e) => {
     e.preventDefault()
+    if (uploadFile && uploadFile.size > MAX_RESUME_FILE_SIZE_BYTES) {
+      setUploadSuccess(`Upload Error: File size exceeds the maximum allowed limit of 10 MB.`)
+      return
+    }
     setUploading(true)
     setUploadSuccess(null)
+    setErrorBanner(null)
     try {
-      let res
-      if (uploadFile) {
-        const formData = new FormData()
-        formData.append("file", uploadFile)
-        if (candidateName) formData.append("name", candidateName)
-        if (candidateEmail) formData.append("email", candidateEmail)
-        res = await fetch("/api/resumes", {
-          method: "POST",
-          body: formData
-        })
-      } else if (uploadText.trim()) {
-        res = await fetch("/api/resumes", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            raw_text: uploadText,
-            name: candidateName || "New Candidate",
-            email: candidateEmail || "candidate@example.com"
-          })
-        })
-      }
-
-      if (res && res.ok) {
-        setUploadSuccess("Resume successfully parsed and indexed into ATS pool!")
-        setUploadFile(null)
-        setUploadText("")
-        setCandidateName("")
-        setCandidateEmail("")
-        fetchResumes()
-        if (selectedJobId) {
-          loadJobDetails(selectedJobId)
-        }
-      } else {
-        const errData = await res.json()
-        setUploadSuccess(`Error: ${errData.error || "Failed to upload"}`)
+      const resData = await apiUploadResume({
+        file: uploadFile,
+        rawText: uploadText,
+        name: candidateName,
+        email: candidateEmail,
+        jobId: selectedJobId
+      })
+      const cName = resData.candidateName || "Candidate"
+      const skillCount = resData.skillsCount || resData.extractedSkills?.length || 0
+      setUploadSuccess(`Resume successfully parsed and associated with this job! Candidate: ${cName} (${skillCount} canonical skills detected).`)
+      setUploadFile(null)
+      setUploadText("")
+      setCandidateName("")
+      setCandidateEmail("")
+      await fetchResumes()
+      if (selectedJobId) {
+        await loadJobDetails(selectedJobId)
       }
     } catch (err) {
       console.error("Error uploading resume:", err)
-      setUploadSuccess("Network error during upload.")
+      setUploadSuccess(`Upload Error: ${err.message}`)
     } finally {
       setUploading(false)
     }
@@ -294,6 +328,22 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
         </div>
       </div>
 
+      {/* Visible Error Banner */}
+      {errorBanner && (
+        <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-semibold flex items-center justify-between shadow-sm animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-500 flex-shrink-0" />
+            <span>{errorBanner}</span>
+          </div>
+          <button
+            onClick={() => setErrorBanner(null)}
+            className="text-xs font-bold underline hover:no-underline ml-4 cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Main Grid: Job Selector Sidebar + Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         
@@ -319,7 +369,10 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
                 return (
                   <button
                     key={job.id}
-                    onClick={() => setSelectedJobId(job.id)}
+                    onClick={() => {
+                      setSelectedJobId(job.id)
+                      if (onSelectJob) onSelectJob(job.id)
+                    }}
                     className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
                       isSelected
                         ? "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 text-indigo-950 dark:text-indigo-100 shadow-sm"
@@ -488,49 +541,129 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
               {/* TAB 1: CANDIDATE RANKINGS */}
               {activeTab === "ranking" && (
                 <div className="pt-4 space-y-4">
+                  {/* Status & Control Header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-white/[0.06]">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          Requisition Applicant Pool
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          {matchResults.length} Evaluated • Max 100 Synchronous Limit
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Deterministic matching using canonical skill coverage against job requisition requirements.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleRecalculateWeights}
+                        disabled={loading}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+                        {loading ? "Evaluating Matches..." : "Run Deterministic Matching Now"}
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="overflow-x-auto">
+                    {loading ? (
+                      <div className="text-center py-12 space-y-3 bg-slate-50 dark:bg-white/[0.02] rounded-xl border border-dashed border-slate-200 dark:border-white/10">
+                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400">
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        </div>
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          Deterministic Matching in Progress...
+                        </div>
+                        <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                          Evaluating candidate canonical skill coverage against job requirements (synchronous safety limit: 100 max).
+                        </p>
+                      </div>
+                    ) : matchResults.length === 0 ? (
+                      <div className="text-center py-10 space-y-3 bg-slate-50 dark:bg-white/[0.02] rounded-xl border border-dashed border-slate-200 dark:border-white/10">
+                        <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-400">
+                          <BarChart3 className="w-5 h-5" />
+                        </div>
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          No eligible applicants currently associated with this job.
+                        </div>
+                        <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                          Upload a candidate resume to evaluate this requisition, or select an indexed candidate from the Candidate Pool.
+                        </p>
+                        <div className="flex items-center justify-center gap-3 pt-1">
+                          <button
+                            onClick={() => setActiveTab("upload")}
+                            className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                          >
+                            <FileUp className="w-3.5 h-3.5" />
+                            Upload Applicant Resume
+                          </button>
+                          <button
+                            onClick={handleRecalculateWeights}
+                            disabled={loading}
+                            className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+                          >
+                            Run Matching Now
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
                     <table className="w-full text-left text-xs">
                       <thead>
                         <tr className="border-b border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500 font-semibold uppercase tracking-wider text-[10px]">
-                          <th className="py-2.5 px-3">Normal Rank</th>
+                          <th className="py-2.5 px-3">Rank</th>
                           <th className="py-2.5 px-3">Candidate</th>
-                          <th className="py-2.5 px-3">Keyword Score</th>
-                          <th className="py-2.5 px-3">Semantic Score</th>
-                          <th className="py-2.5 px-3">Final Score</th>
+                          <th className="py-2.5 px-3">Required Skill Coverage</th>
+                          <th className="py-2.5 px-3">Preferred Coverage</th>
+                          <th className="py-2.5 px-3">Overall Match Score</th>
                           <th className="py-2.5 px-3">Matched Skills</th>
                           <th className="py-2.5 px-3">Skill Gap</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-white/[0.04]">
-                        {matchResults.map((cand, idx) => (
-                          <tr key={cand.id || idx} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.01]">
+                        {matchResults.map((cand, idx) => {
+                          const reqScore = cand.required_skill_coverage != null ? Number(cand.required_skill_coverage) : (cand.keyword_score != null ? Number(cand.keyword_score) : 0)
+                          const prefScore = cand.preferred_skill_coverage != null ? Number(cand.preferred_skill_coverage) : (cand.semantic_score != null ? Number(cand.semantic_score) : 0)
+                          const overall = cand.overall_score != null ? Number(cand.overall_score) : (cand.final_score != null ? Number(cand.final_score) : 0)
+                          const rank = cand.rank_in_pool || cand.normal_rank || idx + 1
+                          const candName = cand.candidate_name || `Candidate #${cand.candidate_id || cand.resume_id || idx + 1}`
+                          const candEmail = cand.candidate_email || "Demographic-Neutral Profile"
+                          const reqPct = reqScore <= 1.0 ? reqScore * 100 : reqScore
+                          const prefPct = prefScore <= 1.0 ? prefScore * 100 : prefScore
+                          const overallPct = overall > 1.0 ? overall : overall * 100
+
+                          return (
+                          <tr key={cand.id || cand.match_id || idx} className="hover:bg-slate-50/50 dark:hover:bg-white/[0.01]">
                             <td className="py-3 px-3">
                               <span className="inline-flex items-center justify-center w-6 h-6 rounded-full font-bold bg-slate-100 dark:bg-white/[0.08] text-slate-800 dark:text-slate-200">
-                                #{cand.normal_rank || idx + 1}
+                                #{rank}
                               </span>
                             </td>
                             <td className="py-3 px-3">
                               <div className="font-semibold text-slate-900 dark:text-white">
-                                {cand.candidate_name}
+                                {candName}
                               </div>
                               <div className="text-[10px] text-slate-500">
-                                {cand.years_experience} yrs exp • {cand.candidate_email || "No email"}
+                                {candEmail}
                               </div>
                             </td>
                             <td className="py-3 px-3 font-mono font-medium text-amber-600 dark:text-amber-400">
-                              {(cand.keyword_score * 100).toFixed(1)}%
+                              {reqPct.toFixed(1)}%
                             </td>
                             <td className="py-3 px-3 font-mono font-medium text-indigo-600 dark:text-indigo-400">
-                              {(cand.semantic_score * 100).toFixed(1)}%
+                              {prefPct.toFixed(1)}%
                             </td>
                             <td className="py-3 px-3">
                               <div className="font-mono font-bold text-slate-900 dark:text-white">
-                                {(cand.final_score * 100).toFixed(1)}%
+                                {overallPct.toFixed(1)}%
                               </div>
                               <div className="w-16 h-1 bg-slate-100 dark:bg-white/10 rounded-full overflow-hidden mt-1">
                                 <div
                                   className="h-full bg-indigo-600 rounded-full"
-                                  style={{ width: `${Math.min(100, cand.final_score * 100)}%` }}
+                                  style={{ width: `${Math.min(100, Math.max(0, overallPct))}%` }}
                                 ></div>
                               </div>
                             </td>
@@ -544,30 +677,39 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
                                 {cand.matched_skills?.length > 3 && (
                                   <span className="text-[10px] text-slate-400">+{cand.matched_skills.length - 3}</span>
                                 )}
+                                {(!cand.matched_skills || cand.matched_skills.length === 0) && (
+                                  <span className="text-[10px] text-slate-400">None</span>
+                                )}
                               </div>
                             </td>
                             <td className="py-3 px-3 max-w-[180px]">
                               <div className="flex flex-wrap gap-1">
                                 {cand.missing_skills?.slice(0, 2).map((sk, i) => (
-                                  <span key={i} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-slate-500 text-[10px]">
+                                  <span key={i} className="px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-[10px]">
                                     {sk}
                                   </span>
                                 ))}
                                 {cand.missing_skills?.length > 2 && (
                                   <span className="text-[10px] text-slate-400">+{cand.missing_skills.length - 2}</span>
                                 )}
+                                {(!cand.missing_skills || cand.missing_skills.length === 0) && (
+                                  <span className="text-[10px] text-emerald-500 font-semibold">Complete fit</span>
+                                )}
                               </div>
                             </td>
                           </tr>
-                        ))}
+                          )
+                        })}
                       </tbody>
                     </table>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* TAB 2: BLIND SCREENING COMPARISON */}
-              {activeTab === "blind" && blindData && (
+              {activeTab === "blind" && (
+                blindData && blindData.candidates ? (
                 <div className="pt-4 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
                     <div>
@@ -646,10 +788,19 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
                     </table>
                   </div>
                 </div>
+                ) : (
+                  <div className="text-center py-12 space-y-2 bg-slate-50 dark:bg-white/[0.02] rounded-xl border border-dashed border-slate-200 dark:border-white/10">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Blind Screening Metrics Unavailable</p>
+                    <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                      Comparative blind-screening telemetry requires both standard and scrubbed scoring pipelines. The active deterministic Phase 4 matching engine operates without fabricated metrics.
+                    </p>
+                  </div>
+                )
               )}
 
               {/* TAB 3: BIAS ANALYSIS REPORT */}
-              {activeTab === "bias" && biasReport && (
+              {activeTab === "bias" && (
+                biasReport && biasReport.bias_score != null ? (
                 <div className="pt-4 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-200 dark:border-white/10">
                     <div>
@@ -700,6 +851,14 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
                     </div>
                   </div>
                 </div>
+                ) : (
+                  <div className="text-center py-12 space-y-2 bg-slate-50 dark:bg-white/[0.02] rounded-xl border border-dashed border-slate-200 dark:border-white/10">
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">JD Bias Analysis Telemetry</p>
+                    <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                      Natural language bias auditing is currently disconnected. Job description and required skills are actively managed through the canonical skill matching engine.
+                    </p>
+                  </div>
+                )
               )}
 
               {/* TAB 4: INCLUSIVE REWRITE */}
@@ -790,7 +949,7 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
                       <input
                         type="file"
                         accept=".pdf,.docx,.txt"
-                        onChange={(e) => setUploadFile(e.target.files[0] || null)}
+                        onChange={handleFileChange}
                         className="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
                       />
                     </div>
@@ -813,7 +972,7 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
 
                     <div className="flex items-center justify-between">
                       {uploadSuccess && (
-                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        <span className={`text-xs font-semibold ${uploadSuccess.includes("Error") ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400"}`}>
                           {uploadSuccess}
                         </span>
                       )}
@@ -833,23 +992,53 @@ export function RecruiterDashboard({ onOpenLegacyStudio }) {
                       Indexed Candidate Pool ({resumes.length})
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                      {resumes.map(r => (
-                        <div key={r.id} className="p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 space-y-1.5">
-                          <div className="font-semibold text-xs text-slate-900 dark:text-white">
-                            {r.candidate_name}
+                      {resumes.map(r => {
+                        const resumeId = r.resumeId || r.id;
+                        const name = r.candidateName || r.candidate_name || `Candidate #${resumeId}`;
+                        const skillList = (r.extractedSkills || r.skills || []).map(s => typeof s === 'string' ? s : (s.skillName || s.name || ''));
+                        return (
+                          <div key={resumeId} className="p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 space-y-1.5">
+                            <div className="font-semibold text-xs text-slate-900 dark:text-white flex items-center justify-between">
+                              <span>{name}</span>
+                              <span className="text-[10px] font-mono text-indigo-500 font-normal">#{resumeId}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                              {r.parsingStatus || "PARSED"} • {skillList.length} skills extracted
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {skillList.slice(0, 4).map((sk, i) => (
+                                <span key={i} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-[9px] text-slate-600 dark:text-slate-300">
+                                  {sk}
+                                </span>
+                              ))}
+                              {skillList.length > 4 && (
+                                <span className="text-[9px] text-slate-400">+{skillList.length - 4}</span>
+                              )}
+                            </div>
+                            {selectedJobId && (
+                              <button
+                                onClick={async () => {
+                                  setLoading(true);
+                                  setErrorBanner(null);
+                                  try {
+                                    const res = await apiRunJobMatches(selectedJobId, "NORMAL", [resumeId]);
+                                    setMatchResults(res?.results || []);
+                                    setActiveTab("ranking");
+                                  } catch (err) {
+                                    setErrorBanner("Evaluation failed: " + err.message);
+                                  } finally {
+                                    setLoading(false);
+                                  }
+                                }}
+                                disabled={loading}
+                                className="mt-2 w-full py-1 px-2 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-semibold transition-colors cursor-pointer text-center"
+                              >
+                                Evaluate for Selected Job
+                              </button>
+                            )}
                           </div>
-                          <div className="text-[10px] text-slate-500">
-                            {r.years_experience} yrs exp • {r.skills?.length || 0} skills found
-                          </div>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {r.skills?.slice(0, 3).map((sk, i) => (
-                              <span key={i} className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-white/[0.06] text-[9px] text-slate-600 dark:text-slate-300">
-                                {sk}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

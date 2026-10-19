@@ -3,24 +3,34 @@ import { Search, Download, Trash2, ArrowRight, History, Award, Plus, FileSpreads
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
+import { fetchAuditHistory, deleteAuditRecord } from "../services/api"
 
 export function AuditHistory({ onSelectRun, setActiveView }) {
   const [runs, setRuns] = useState([])
   const [searchQuery, setSearchQuery] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState(null)
 
-  const fetchHistory = () => {
+  const fetchHistory = async () => {
     setIsLoading(true)
-    fetch("/api/history")
-      .then(res => res.json())
-      .then(data => {
+    setErrorMessage(null)
+    try {
+      const data = await fetchAuditHistory()
+      if (Array.isArray(data)) {
         setRuns(data)
-        setIsLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setIsLoading(false)
-      })
+      } else {
+        setRuns([])
+        if (data && (data.error || data.message)) {
+          setErrorMessage(data.error || data.message)
+        }
+      }
+    } catch (err) {
+      console.error("Audit history fetch error:", err)
+      setErrorMessage(err.message || "Failed to load audit history from ledger.")
+      setRuns([])
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -28,23 +38,23 @@ export function AuditHistory({ onSelectRun, setActiveView }) {
   }, [])
 
   const handleDelete = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to permanently delete audit record for "${title}" (Run #${id})?`)) {
+    if (!window.confirm(`Are you sure you want to permanently clear audit record for "${title}" (Run #${id})?`)) {
       return
     }
 
     try {
-      const res = await fetch(`/api/history/${id}`, { method: "DELETE" })
-      if (res.ok) {
-        setRuns(prev => prev.filter(r => r.id !== id))
-      }
+      await deleteAuditRecord(id)
+      setRuns(prev => (Array.isArray(prev) ? prev.filter(r => r.id !== id) : []))
     } catch (err) {
       console.error("Delete error:", err)
+      setErrorMessage(err.message || "Failed to clear audit record.")
     }
   }
 
-  const filteredRuns = runs.filter(r => 
-    (r.jd_title || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    String(r.id || "").includes(searchQuery)
+  const safeRuns = Array.isArray(runs) ? runs : []
+  const filteredRuns = safeRuns.filter(r => 
+    (r?.jd_title || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+    String(r?.id || "").includes(searchQuery)
   )
 
   return (
@@ -74,6 +84,27 @@ export function AuditHistory({ onSelectRun, setActiveView }) {
           <span>Launch New Screening</span>
         </Button>
       </div>
+
+      {/* Error Alert Banner */}
+      {errorMessage && (
+        <div 
+          id="audit-error-banner"
+          className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between gap-3 shadow-sm"
+        >
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span className="font-medium">{errorMessage}</span>
+          </div>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={fetchHistory}
+            className="text-xs h-7 px-3 border-rose-300 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/40"
+          >
+            Retry
+          </Button>
+        </div>
+      )}
 
       {/* Main Table Card */}
       <Card className="p-0 overflow-hidden border-slate-200 dark:border-white/[0.08]">

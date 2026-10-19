@@ -136,22 +136,29 @@ public class SkillCoverageMatchingService {
                         ") exceeds maximum synchronous limit (100). Filter candidates by department, status, or explicit resume IDs."
                 );
             }
-            for (Long resumeId : requestedResumeIds) {
+            Set<Long> uniqueResumeIds = new LinkedHashSet<>(requestedResumeIds);
+            for (Long resumeId : uniqueResumeIds) {
                 Resume r = resumeRepository.findById(resumeId)
                         .orElseThrow(() -> new ResourceNotFoundException("Resume with ID " + resumeId + " not found."));
                 targetResumes.add(r);
             }
         } else {
-            List<Resume> allResumes = resumeRepository.findAll();
-            targetResumes = allResumes.stream()
-                    .filter(r -> r.getParsingStatus() == ParsingStatus.READY || r.getParsingStatus() == ParsingStatus.COMPLETED)
-                    .collect(Collectors.toList());
-
-            if (targetResumes.size() > 100) {
+            // Retrieve candidate resumes legitimately associated with this job via existing match results
+            List<Long> associatedResumeIds = matchResultRepository.findDistinctResumeIdsByJobId(job.getId());
+            if (associatedResumeIds.size() > 100) {
                 throw new BatchSizeLimitExceededException(
-                        "Requested candidate batch size (" + targetResumes.size() +
+                        "Requested candidate batch size (" + associatedResumeIds.size() +
                         ") exceeds maximum synchronous limit (100). Filter candidates by department, status, or explicit resume IDs."
                 );
+            }
+            for (Long resumeId : associatedResumeIds) {
+                Resume r = resumeRepository.findById(resumeId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Resume with ID " + resumeId + " not found."));
+                if (r.getParsingStatus() == ParsingStatus.READY ||
+                    r.getParsingStatus() == ParsingStatus.COMPLETED ||
+                    r.getParsingStatus() == ParsingStatus.PARSED) {
+                    targetResumes.add(r);
+                }
             }
         }
 
@@ -467,6 +474,29 @@ public class SkillCoverageMatchingService {
         dto.setRequiredSkills(reqDtos);
         dto.setPreferredSkills(prefDtos);
 
+        if (mr.getCandidate() != null) {
+            dto.setCandidateName(mr.getCandidate().getFullName());
+            dto.setCandidateEmail(mr.getCandidate().getEmail());
+        }
+        List<String> matched = new ArrayList<>();
+        List<String> missing = new ArrayList<>();
+        for (MatchSkillDetailDto d : reqDtos) {
+            if (Boolean.TRUE.equals(d.getMatched())) {
+                if (d.getSkillName() != null) matched.add(d.getSkillName());
+            } else {
+                if (d.getSkillName() != null) missing.add(d.getSkillName());
+            }
+        }
+        for (MatchSkillDetailDto d : prefDtos) {
+            if (Boolean.TRUE.equals(d.getMatched())) {
+                if (d.getSkillName() != null) matched.add(d.getSkillName());
+            } else {
+                if (d.getSkillName() != null) missing.add(d.getSkillName());
+            }
+        }
+        dto.setMatchedSkills(matched);
+        dto.setMissingSkills(missing);
+
         return dto;
     }
 
@@ -549,7 +579,157 @@ public class SkillCoverageMatchingService {
         dto.setPreferredSkillsTotal(mr.getPreferredSkillsTotal());
         dto.setIsStale(mr.getIsStale());
         dto.setScoredAt(mr.getScoredAt());
+        dto.setRankInPool(mr.getRankInPool());
+
+        if (mr.getCandidate() != null) {
+            dto.setCandidateName(mr.getCandidate().getFullName());
+            dto.setCandidateEmail(mr.getCandidate().getEmail());
+        }
+
+        if (mr.getSkillDetails() != null && !mr.getSkillDetails().isEmpty()) {
+            List<String> matchedSkills = new ArrayList<>();
+            List<String> missingSkills = new ArrayList<>();
+            for (MatchSkillDetail detail : mr.getSkillDetails()) {
+                String name = detail.getSkill() != null ? detail.getSkill().getName() : null;
+                if (name != null) {
+                    if (Boolean.TRUE.equals(detail.getIsMatched())) {
+                        matchedSkills.add(name);
+                    } else {
+                        missingSkills.add(name);
+                    }
+                }
+            }
+            dto.setMatchedSkills(matchedSkills);
+            dto.setMissingSkills(missingSkills);
+        }
         return dto;
+    }
+
+    /**
+     * Transparent, read-only candidate self-screening evaluation.
+     * Evaluates candidate's extracted skills against an active job's canonical requirements
+     * using the deterministic scoring engine without creating or mutating recruiter applicant records.
+     *
+     * @param jobId Target job ID
+     * @param resumeId Ingested candidate resume ID
+     * @return CandidateSelfScreenResponseDto containing match breakdown and skill feedback
+     */
+    @Transactional(readOnly = true)
+    public CandidateSelfScreenResponseDto selfScreen(Long jobId, Long resumeId) {
+        if (jobId == null) {
+            throw new ResourceNotFoundException("Job ID cannot be null.");
+        }
+        if (resumeId == null) {
+            throw new ResourceNotFoundException("Resume ID cannot be null.");
+        }
+
+        Job job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Job with ID " + jobId + " not found."));
+
+        // Validate that the job is eligible for candidate self-screening (must be ACTIVE)
+        if (job.getStatus() != JobStatus.ACTIVE) {
+            throw new IllegalStateException("Job ID " + jobId + " is not currently active for candidate self-screening.");
+        }
+
+        Resume resume = resumeRepository.findById(resumeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Resume with ID " + resumeId + " not found."));
+
+        if (resume.getParsingStatus() != ParsingStatus.READY &&
+            resume.getParsingStatus() != ParsingStatus.PARSED &&
+            resume.getParsingStatus() != ParsingStatus.COMPLETED) {
+            throw new IllegalStateException("Resume parsing is incomplete or failed. Current status: " + resume.getParsingStatus());
+        }
+
+        // Partition canonical skill requirements
+        List<JobSkill> jobSkills = job.getJobSkills() != null ? new ArrayList<>(job.getJobSkills()) : Collections.emptyList();
+        jobSkills.sort(Comparator.comparing(JobSkill::getId, Comparator.nullsLast(Comparator.naturalOrder())));
+
+        Set<Long> requiredSkillIds = new HashSet<>();
+        Set<Long> rawPreferredSkillIds = new HashSet<>();
+        Map<Long, String> skillNameMap = new HashMap<>();
+
+        for (JobSkill js : jobSkills) {
+            if (js.getSkill() != null && js.getSkill().getId() != null) {
+                Long sid = js.getSkill().getId();
+                skillNameMap.put(sid, js.getSkill().getName());
+                if (Boolean.TRUE.equals(js.getIsMandatory())) {
+                    requiredSkillIds.add(sid);
+                } else {
+                    rawPreferredSkillIds.add(sid);
+                }
+            }
+        }
+
+        Set<Long> preferredSkillIds = new HashSet<>(rawPreferredSkillIds);
+        preferredSkillIds.removeAll(requiredSkillIds);
+
+        if (requiredSkillIds.isEmpty()) {
+            throw new MatchingRequirementsNotFoundException(
+                    "Job " + jobId + " has zero recognized canonical skill requirements. Self-screening is unavailable."
+            );
+        }
+
+        // Extract candidate skills
+        Set<Long> candidateSkillIds = new HashSet<>();
+        if (resume.getResumeSkills() != null) {
+            for (ResumeSkill rs : resume.getResumeSkills()) {
+                if (rs.getSkill() != null && rs.getSkill().getId() != null) {
+                    Long sid = rs.getSkill().getId();
+                    candidateSkillIds.add(sid);
+                    skillNameMap.put(sid, rs.getSkill().getName());
+                }
+            }
+        }
+
+        // Execute pure mathematical scoring (zero PII passed)
+        DeterministicScoringEngine.MatchScoreResult score = scoringEngine.computeScore(
+                candidateSkillIds, requiredSkillIds, preferredSkillIds
+        );
+
+        List<String> matchedSkills = new ArrayList<>();
+        List<String> missingSkills = new ArrayList<>();
+
+        for (Long reqId : requiredSkillIds) {
+            String name = skillNameMap.getOrDefault(reqId, "Skill #" + reqId);
+            if (candidateSkillIds.contains(reqId)) {
+                matchedSkills.add(name);
+            } else {
+                missingSkills.add(name + " (Required)");
+            }
+        }
+
+        for (Long prefId : preferredSkillIds) {
+            String name = skillNameMap.getOrDefault(prefId, "Skill #" + prefId);
+            if (candidateSkillIds.contains(prefId)) {
+                matchedSkills.add(name + " (Preferred)");
+            } else {
+                missingSkills.add(name + " (Preferred)");
+            }
+        }
+
+        matchedSkills.sort(String.CASE_INSENSITIVE_ORDER);
+        missingSkills.sort(String.CASE_INSENSITIVE_ORDER);
+
+        String candidateName = "Candidate";
+        if (resume.getCandidate() != null && resume.getCandidate().getFullName() != null) {
+            candidateName = resume.getCandidate().getFullName();
+        }
+
+        boolean isQualified = score.requiredSkillCoverage().compareTo(new BigDecimal("0.7000")) >= 0;
+
+        return new CandidateSelfScreenResponseDto(
+                job.getId(),
+                job.getTitle(),
+                job.getDepartment(),
+                resume.getId(),
+                candidateName,
+                score.overallScore(),
+                score.requiredSkillCoverage(),
+                score.preferredSkillCoverage(),
+                isQualified,
+                matchedSkills,
+                missingSkills
+        );
     }
 
     private ScreeningMode parseScreeningMode(String screeningModeStr) {

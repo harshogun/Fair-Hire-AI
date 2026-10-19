@@ -2,25 +2,64 @@ import React from "react"
 import {
   ShieldCheck,
   History,
-  ArrowRight,
   Sun,
   Moon,
   Briefcase,
   UserCheck,
   Award,
-  Layers,
-  Sparkles
+  User,
+  LogOut,
+  LogIn
 } from "lucide-react"
 import { Button } from "./ui/button"
 
-export function Navbar({ activeView, setActiveView, onNewScreening, theme, toggleTheme }) {
+export function Navbar({ 
+  currentPath = "/candidate",
+  onNavigate,
+  activeView, 
+  setActiveView, 
+  onNewScreening, 
+  theme, 
+  toggleTheme,
+  isAuthenticated,
+  currentUser,
+  onLogout
+}) {
+  const navigate = (path) => {
+    if (onNavigate) {
+      onNavigate(path)
+    } else if (setActiveView) {
+      // Fallback mapping for legacy view names
+      const viewMap = {
+        "/candidate": "candidate",
+        "/recruiter": "recruiter",
+        "/recruiter/jobs": "recruiter",
+        "/recruiter/audit": "history",
+        "/admin/research": "admin",
+        "/login": "login"
+      }
+      setActiveView(viewMap[path] || path)
+    }
+  }
+
+  const isCurrent = (target) => {
+    if (currentPath === target) return true
+    if (target === "/recruiter" && (currentPath === "/recruiter" || currentPath.startsWith("/recruiter/jobs"))) return true
+    if (target === "/recruiter/audit" && (currentPath === "/recruiter/audit" || activeView === "history")) return true
+    if (target === "/candidate" && (currentPath === "/candidate" || activeView === "candidate")) return true
+    if (target === "/admin/research" && (currentPath === "/admin/research" || activeView === "admin")) return true
+    return false
+  }
+
+  const isAdminUser = currentUser?.role === "ADMIN"
+
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200 dark:border-white/[0.08] bg-white/90 dark:bg-[#080c14]/90 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
         {/* Brand Logo */}
         <div 
-          onClick={() => setActiveView("landing")}
+          onClick={() => navigate(isAuthenticated ? "/recruiter" : "/candidate")}
           className="flex items-center gap-3 cursor-pointer group select-none"
         >
           <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center shadow-sm">
@@ -32,72 +71,88 @@ export function Navbar({ activeView, setActiveView, onNewScreening, theme, toggl
               FairHire AI
             </span>
             <span className="text-[10px] font-mono font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 rounded-md">
-              v2.5 Architecture
+              v2.5
             </span>
           </div>
         </div>
 
-        {/* Navigation Links based on Architecture */}
+        {/* Navigation Links */}
         <nav className="hidden lg:flex items-center gap-5 text-xs font-semibold">
-          <button
-            onClick={() => setActiveView("recruiter")}
-            className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
-              activeView === "recruiter" 
-                ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <Briefcase className="w-3.5 h-3.5" />
-            Recruiter Studio
-          </button>
+          {isAuthenticated ? (
+            <>
+              <button
+                id="nav-recruiter-btn"
+                onClick={() => navigate("/recruiter")}
+                className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
+                  isCurrent("/recruiter") 
+                    ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <Briefcase className="w-3.5 h-3.5" />
+                Recruiter Studio
+              </button>
 
-          <button
-            onClick={() => setActiveView("candidate")}
-            className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
-              activeView === "candidate" 
-                ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <UserCheck className="w-3.5 h-3.5" />
-            Candidate Portal
-          </button>
+              <button
+                id="nav-audit-btn"
+                onClick={() => navigate("/recruiter/audit")}
+                className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
+                  isCurrent("/recruiter/audit") 
+                    ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                Audit Ledger
+              </button>
 
-          <button
-            onClick={() => setActiveView("admin")}
-            className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
-              activeView === "admin" 
-                ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <Award className="w-3.5 h-3.5" />
-            Research & Admin
-          </button>
+              <button
+                id="nav-candidate-btn"
+                onClick={() => navigate("/candidate")}
+                className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
+                  isCurrent("/candidate") 
+                    ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                }`}
+              >
+                <UserCheck className="w-3.5 h-3.5" />
+                <span>Candidate Portal</span>
+                {isCurrent("/candidate") && (
+                  <span className="text-[9px] font-mono font-medium px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300">
+                    Public View
+                  </span>
+                )}
+              </button>
 
-          <button
-            onClick={() => setActiveView("architecture")}
-            className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
-              activeView === "architecture" 
-                ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            System Design
-          </button>
-
-          <button
-            onClick={() => setActiveView("history")}
-            className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
-              activeView === "history" 
-                ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
-                : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
-            }`}
-          >
-            <History className="w-3.5 h-3.5" />
-            Audit Ledger
-          </button>
+              {isAdminUser && (
+                <button
+                  id="nav-admin-btn"
+                  onClick={() => navigate("/admin/research")}
+                  className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
+                    isCurrent("/admin/research") 
+                      ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
+                      : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  Research & Admin
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              id="nav-candidate-public-btn"
+              onClick={() => navigate("/candidate")}
+              className={`transition-colors cursor-pointer py-1 flex items-center gap-1.5 ${
+                isCurrent("/candidate") 
+                  ? "text-indigo-600 dark:text-indigo-400 font-bold border-b-2 border-indigo-600 dark:border-indigo-500" 
+                  : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white"
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" />
+              Candidate Portal
+            </button>
+          )}
         </nav>
 
         {/* Status, Theme Switcher & Action CTA */}
@@ -123,17 +178,57 @@ export function Navbar({ activeView, setActiveView, onNewScreening, theme, toggl
             <span>REST API Active</span>
           </div>
 
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => setActiveView("recruiter")}
-            className="flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-lg"
-          >
-            <span>Launch Recruiter</span>
-            <ArrowRight className="w-3 h-3" />
-          </Button>
-        </div>
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/80 dark:bg-indigo-950/40 text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
+                <User className="w-3.5 h-3.5 text-indigo-500" />
+                <span>{currentUser?.name || "Recruiter"}</span>
+                <span className="text-[10px] opacity-75 font-mono">({currentUser?.department || "Engineering"})</span>
+                {isAdminUser && (
+                  <span className="ml-1 px-1.5 py-0.2 rounded bg-indigo-600 text-white text-[9px] font-bold">
+                    ADMIN
+                  </span>
+                )}
+              </div>
+              {isCurrent("/candidate") && (
+                <Button
+                  id="nav-back-to-recruiter-btn"
+                  variant="default"
+                  size="sm"
+                  onClick={() => navigate("/recruiter")}
+                  className="hidden sm:flex items-center gap-1.5 text-xs font-semibold h-8 px-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm cursor-pointer"
+                  title="Switch back to Recruiter Studio"
+                >
+                  <Briefcase className="w-3.5 h-3.5" />
+                  <span>Recruiter Studio</span>
+                </Button>
+              )}
+              <Button
+                id="nav-logout-btn"
+                variant="outline"
+                size="sm"
+                onClick={onLogout}
+                className="flex items-center gap-1.5 text-xs font-semibold h-8 px-2.5 rounded-lg text-slate-700 dark:text-slate-300 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-300 dark:hover:border-rose-800 transition-colors"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </Button>
+            </div>
+          ) : (
+            <Button
+              id="nav-login-btn"
+              variant="default"
+              size="sm"
+              onClick={() => navigate("/login")}
+              className="flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-lg shadow-sm"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Recruiter Sign In</span>
+            </Button>
+          )}
 
+        </div>
       </div>
     </header>
   )

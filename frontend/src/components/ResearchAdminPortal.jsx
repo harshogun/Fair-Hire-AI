@@ -11,14 +11,17 @@ import {
   Database,
   Users,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  AlertTriangle
 } from "lucide-react"
+import { fetchResearchMetrics, fetchResearchExperiments, isAdmin, getStoredUser } from "../services/api"
 
 export function ResearchAdminPortal() {
   const [metrics, setMetrics] = useState(null)
   const [experiments, setExperiments] = useState([])
   const [loading, setLoading] = useState(false)
   const [benchmarking, setBenchmarking] = useState(false)
+  const [authError, setAuthError] = useState(null)
 
   // Dataset & Users Summary
   const [usersCount, setUsersCount] = useState(3)
@@ -29,21 +32,23 @@ export function ResearchAdminPortal() {
   })
 
   useEffect(() => {
-    loadData()
+    if (isAdmin()) {
+      loadData()
+    }
   }, [])
 
   const loadData = async () => {
     setLoading(true)
+    setAuthError(null)
     try {
-      const mRes = await fetch("/api/reports/metrics")
-      const mData = await mRes.json()
+      const mData = await fetchResearchMetrics()
       setMetrics(mData)
 
-      const eRes = await fetch("/api/reports/experiments")
-      const eData = await eRes.json()
-      setExperiments(eData)
+      const eData = await fetchResearchExperiments()
+      setExperiments(Array.isArray(eData) ? eData : [])
     } catch (err) {
       console.error("Error loading metrics:", err)
+      setAuthError(err.message)
     } finally {
       setLoading(false)
     }
@@ -77,6 +82,22 @@ export function ResearchAdminPortal() {
     } finally {
       setBenchmarking(false)
     }
+  }
+
+  if (!isAdmin()) {
+    return (
+      <div className="max-w-xl mx-auto py-24 px-4 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto shadow-sm">
+          <Shield className="w-7 h-7" />
+        </div>
+        <h2 className="text-2xl font-bold font-heading text-slate-900 dark:text-white">
+          Research Admin Privileges Required
+        </h2>
+        <p className="text-xs text-slate-600 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+          The Academic Research Evaluation & Experiment Engine requires an authorized Administrator account (<span className="font-mono text-purple-600 dark:text-purple-400">admin@fairhire.ai</span>). Your active session role is <strong className="font-mono uppercase">{getStoredUser()?.role || "GUEST"}</strong>.
+        </p>
+      </div>
+    )
   }
 
   return (

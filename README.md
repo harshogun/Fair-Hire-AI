@@ -68,8 +68,12 @@ FairHire AI uses **Docker PostgreSQL 16** as its canonical development database 
 ---
 
 ### Option A: Complete Multi-Container Stack (Recommended)
-Run the entire architecture (Frontend, Backend, AI Service, PostgreSQL) in Docker:
+Before running Docker Compose with `--build`, ensure the production artifacts are compiled:
 ```bash
+# 1. Compile backend JAR & frontend production assets
+cd backend && ./mvnw package -DskipTests && cd ../frontend && npm run build && cd ..
+
+# 2. Run the entire architecture (Frontend, Backend, AI Service, PostgreSQL) in Docker:
 docker compose up --build -d
 ```
 All services start with orchestrated health dependencies:

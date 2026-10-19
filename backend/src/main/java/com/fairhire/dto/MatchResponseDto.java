@@ -42,6 +42,22 @@ public class MatchResponseDto {
     @JsonProperty("scored_at")
     private Instant scoredAt;
 
+    @JsonProperty("rank_in_pool")
+    @com.fasterxml.jackson.annotation.JsonAlias("normal_rank")
+    private Integer rankInPool;
+
+    @JsonProperty("candidate_name")
+    private String candidateName;
+
+    @JsonProperty("candidate_email")
+    private String candidateEmail;
+
+    @JsonProperty("matched_skills")
+    private java.util.List<String> matchedSkills = new java.util.ArrayList<>();
+
+    @JsonProperty("missing_skills")
+    private java.util.List<String> missingSkills = new java.util.ArrayList<>();
+
     public MatchResponseDto() {}
 
     public Long getMatchId() { return matchId; }
@@ -79,4 +95,31 @@ public class MatchResponseDto {
 
     public Instant getScoredAt() { return scoredAt; }
     public void setScoredAt(Instant scoredAt) { this.scoredAt = scoredAt; }
+
+    public Integer getRankInPool() { return rankInPool; }
+    public void setRankInPool(Integer rankInPool) { this.rankInPool = rankInPool; }
+
+    public String getCandidateName() { return candidateName; }
+    public void setCandidateName(String candidateName) { this.candidateName = candidateName; }
+
+    public String getCandidateEmail() { return candidateEmail; }
+    public void setCandidateEmail(String candidateEmail) { this.candidateEmail = candidateEmail; }
+
+    public java.util.List<String> getMatchedSkills() { return matchedSkills; }
+    public void setMatchedSkills(java.util.List<String> matchedSkills) { this.matchedSkills = matchedSkills; }
+
+    public java.util.List<String> getMissingSkills() { return missingSkills; }
+    public void setMissingSkills(java.util.List<String> missingSkills) { this.missingSkills = missingSkills; }
+
+    @JsonProperty("final_score")
+    public BigDecimal getFinalScore() { return overallScore; }
+
+    @JsonProperty("keyword_score")
+    public BigDecimal getKeywordScore() { return requiredSkillCoverage; }
+
+    @JsonProperty("semantic_score")
+    public BigDecimal getSemanticScore() { return preferredSkillCoverage; }
+
+    @JsonProperty("normal_rank")
+    public Integer getNormalRank() { return rankInPool; }
 }

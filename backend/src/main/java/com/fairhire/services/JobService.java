@@ -263,15 +263,17 @@ public class JobService {
         String reqStr = job.getRequirements().isEmpty() ? "" :
                 job.getRequirements().get(0).getRequirementValue();
 
-        return Map.of(
-                "id", job.getId(),
-                "title", job.getTitle(),
-                "description", job.getDescription(),
-                "requirements", reqStr,
-                "skills", skills,
-                "bias_reports", biasItems,
-                "bias_count", biasItems.size(),
-                "created_at", job.getCreatedAt().toString()
-        );
+        Map<String, Object> dto = new LinkedHashMap<>();
+        dto.put("id", job.getId());
+        dto.put("title", job.getTitle());
+        dto.put("department", job.getDepartment());
+        dto.put("status", job.getStatus() != null ? job.getStatus().name() : "ACTIVE");
+        dto.put("description", job.getDescription());
+        dto.put("requirements", reqStr);
+        dto.put("skills", skills);
+        dto.put("bias_reports", biasItems);
+        dto.put("bias_count", biasItems.size());
+        dto.put("created_at", job.getCreatedAt().toString());
+        return dto;
     }
 }

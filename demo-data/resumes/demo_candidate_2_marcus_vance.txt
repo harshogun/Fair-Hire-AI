@@ -1,0 +1,29 @@
+[SYNTHETIC DEMO CANDIDATE PROFILE - GENERATED FOR FAIRHIRE AI DEMONSTRATION ONLY]
+Name: Marcus Vance
+Email: marcus.vance@demo.fairhire.ai
+Title: DevOps & Cloud Infrastructure Specialist
+
+Professional Summary:
+DevOps and Site Reliability Engineer with 5 years of experience automating infrastructure, scaling cloud architectures, and optimizing production deployments. Specialized in Docker, Kubernetes, AWS, Linux system administration, and Git workflow automation.
+
+Core Technical Competencies:
+- Cloud & Platforms: AWS, Azure, GCP
+- Containerization & Orchestration: Docker, Kubernetes
+- Operating Systems & Tools: Linux, Git
+- Scripting & Automation: Python, Go, Bash
+- Databases: PostgreSQL, MySQL
+
+Professional Experience:
+Site Reliability Engineer | Horizon Cloud Networks (2021 - Present)
+- Engineered automated multi-region infrastructure on AWS using Docker containers and Kubernetes clusters.
+- Administered Linux server fleets ensuring 99.99% system availability.
+- Developed automation and monitoring tooling with Python and Go.
+- Streamlined release workflows with Git version control and automated branch policies.
+
+DevOps Engineer | BluePeak Digital (2019 - 2021)
+- Managed container builds and image registries using Docker.
+- Administered PostgreSQL and MySQL database backups and replica sets.
+- Built Linux automation scripts reducing routine maintenance overhead by 40%.
+
+Education:
+B.S. in Information Systems | University of Illinois Urbana-Champaign

@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/jobs")
+@RequestMapping({"/api/v1/jobs", "/api/jobs"})
 @CrossOrigin(origins = "*")
 public class JobController {
 

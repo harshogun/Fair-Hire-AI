@@ -163,6 +163,46 @@ public class MatchDetailResponseDto {
     public BigDecimal getPreferredContribution() { return preferredContribution; }
     public void setPreferredContribution(BigDecimal preferredContribution) { this.preferredContribution = preferredContribution; }
 
+    @JsonProperty("candidate_name")
+    @com.fasterxml.jackson.annotation.JsonAlias("candidateName")
+    private String candidateName;
+
+    @JsonProperty("candidate_email")
+    @com.fasterxml.jackson.annotation.JsonAlias("candidateEmail")
+    private String candidateEmail;
+
+    @JsonProperty("matched_skills")
+    @com.fasterxml.jackson.annotation.JsonAlias("matchedSkills")
+    private List<String> matchedSkills = new ArrayList<>();
+
+    @JsonProperty("missing_skills")
+    @com.fasterxml.jackson.annotation.JsonAlias("missingSkills")
+    private List<String> missingSkills = new ArrayList<>();
+
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public String getCandidateName() { return candidateName; }
+    public void setCandidateName(String candidateName) { this.candidateName = candidateName; }
+
+    public String getCandidateEmail() { return candidateEmail; }
+    public void setCandidateEmail(String candidateEmail) { this.candidateEmail = candidateEmail; }
+
+    public List<String> getMatchedSkills() { return matchedSkills; }
+    public void setMatchedSkills(List<String> matchedSkills) { this.matchedSkills = matchedSkills; }
+
+    public List<String> getMissingSkills() { return missingSkills; }
+    public void setMissingSkills(List<String> missingSkills) { this.missingSkills = missingSkills; }
+
+    @JsonProperty("final_score")
+    public BigDecimal getFinalScore() { return overallScore; }
+
+    @JsonProperty("keyword_score")
+    public BigDecimal getKeywordScore() { return requiredSkillCoverage; }
+
+    @JsonProperty("semantic_score")
+    public BigDecimal getSemanticScore() { return preferredSkillCoverage; }
+
+    @JsonProperty("normal_rank")
+    public Integer getNormalRank() { return 1; }
 }

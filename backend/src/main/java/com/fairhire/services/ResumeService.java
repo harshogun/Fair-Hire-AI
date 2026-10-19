@@ -3,11 +3,17 @@ package com.fairhire.services;
 import com.fairhire.dto.ExtractedSkillDto;
 import com.fairhire.dto.ResumeUploadResponse;
 import com.fairhire.models.Candidate;
+import com.fairhire.models.Job;
 import com.fairhire.models.Resume;
 import com.fairhire.models.enums.ParsingStatus;
 import com.fairhire.models.enums.ResumeFileType;
 import com.fairhire.repositories.CandidateRepository;
+import com.fairhire.repositories.JobRepository;
 import com.fairhire.repositories.ResumeRepository;
+import com.fairhire.services.matching.MatchingRequirementsNotFoundException;
+import com.fairhire.services.matching.ResourceAuthorizationService;
+import com.fairhire.services.matching.ResourceNotFoundException;
+import com.fairhire.services.matching.SkillCoverageMatchingService;
 import com.fairhire.services.parser.*;
 import com.fairhire.services.skill.SkillExtractionService;
 import com.fairhire.storage.StorageService;
@@ -15,6 +21,7 @@ import org.apache.commons.io.FilenameUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -44,6 +51,9 @@ public class ResumeService {
     private final TextNormalizer textNormalizer;
     private final List<ResumeTextExtractor> textExtractors;
     private final SkillExtractionService skillExtractionService;
+    private final JobRepository jobRepository;
+    private final ResourceAuthorizationService authorizationService;
+    private final SkillCoverageMatchingService matchingService;
     private final String parserVersion;
 
     public ResumeService(
@@ -54,6 +64,9 @@ public class ResumeService {
             TextNormalizer textNormalizer,
             List<ResumeTextExtractor> textExtractors,
             SkillExtractionService skillExtractionService,
+            JobRepository jobRepository,
+            ResourceAuthorizationService authorizationService,
+            @Lazy SkillCoverageMatchingService matchingService,
             @Value("${fairhire.parser.version:v1.0-deterministic}") String parserVersion
     ) {
         this.resumeRepository = resumeRepository;
@@ -63,6 +76,9 @@ public class ResumeService {
         this.textNormalizer = textNormalizer;
         this.textExtractors = textExtractors;
         this.skillExtractionService = skillExtractionService;
+        this.jobRepository = jobRepository;
+        this.authorizationService = authorizationService;
+        this.matchingService = matchingService;
         this.parserVersion = parserVersion;
     }
 
@@ -82,10 +98,18 @@ public class ResumeService {
     @Transactional
     public ResumeUploadResponse ingestResume(
             MultipartFile file,
+            Long jobId,
             Long candidateId,
             String candidateName,
             String candidateEmail
     ) throws IOException {
+
+        Job job = null;
+        if (jobId != null) {
+            job = jobRepository.findById(jobId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Job with ID " + jobId + " not found."));
+            authorizationService.validateJobAccess(job, null);
+        }
 
         // 1. Rigorous upload validation (extension, size, MIME type, magic byte verification, path traversal checks)
         ResumeFileType fileType = resumeValidator.validate(file);
@@ -134,7 +158,7 @@ public class ResumeService {
                 .findFirst()
                 .orElseThrow(() -> new TextExtractionException("No extractor available for file type: " + fileType));
 
-            try {
+        try {
             ExtractionResult extractionResult = extractor.extract(fileBytes);
 
             // 9. Deterministic Text Normalization
@@ -172,7 +196,28 @@ public class ResumeService {
             extractedSkills = skillExtractionService.extractAndSaveSkills(resume);
         }
 
+        // 11. Associate newly uploaded resume with the target job if specified
+        if (job != null && (resume.getParsingStatus() == ParsingStatus.READY || resume.getParsingStatus() == ParsingStatus.PARSED)) {
+            resume = resumeRepository.saveAndFlush(resume);
+            try {
+                matchingService.matchJob(job.getId(), List.of(resume.getId()), job.getDepartment(), null);
+                log.info("Successfully associated and evaluated resume ID {} for job ID {}", resume.getId(), job.getId());
+            } catch (MatchingRequirementsNotFoundException e) {
+                log.warn("Job ID {} has no canonical skill requirements yet; resume ID {} ingested without initial match.", job.getId(), resume.getId());
+            }
+        }
+
         return ResumeUploadResponse.fromEntity(resume, extractedSkills);
+    }
+
+    @Transactional
+    public ResumeUploadResponse ingestResume(
+            MultipartFile file,
+            Long candidateId,
+            String candidateName,
+            String candidateEmail
+    ) throws IOException {
+        return ingestResume(file, null, candidateId, candidateName, candidateEmail);
     }
 
     /**
@@ -180,16 +225,23 @@ public class ResumeService {
      */
     @Transactional
     public ResumeUploadResponse parseAndSaveResume(String rawText, String filePath, String name, String email) {
-        return ingestRawText(rawText, name, email);
+        return ingestRawText(rawText, null, name, email);
     }
 
     /**
-     * Fallback for direct plain-text resume ingestion (useful for testing and benchmark pairs).
+     * Direct plain-text resume ingestion with optional job association.
      */
     @Transactional
-    public ResumeUploadResponse ingestRawText(String rawText, String name, String email) {
+    public ResumeUploadResponse ingestRawText(String rawText, Long jobId, String name, String email) {
         if (rawText == null || rawText.replace("\uFEFF", "").isBlank()) {
             throw new InvalidResumeUploadException("Upload rejected: Raw text cannot be empty or whitespace-only.");
+        }
+
+        Job job = null;
+        if (jobId != null) {
+            job = jobRepository.findById(jobId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Job with ID " + jobId + " not found."));
+            authorizationService.validateJobAccess(job, null);
         }
 
         String normalizedText = textNormalizer.normalize(rawText);
@@ -225,7 +277,23 @@ public class ResumeService {
         // Deterministic Skill Extraction (Phase 3B)
         List<ExtractedSkillDto> extractedSkills = skillExtractionService.extractAndSaveSkills(resume);
 
+        // Associate with job if specified
+        if (job != null && (resume.getParsingStatus() == ParsingStatus.READY || resume.getParsingStatus() == ParsingStatus.PARSED)) {
+            resume = resumeRepository.saveAndFlush(resume);
+            try {
+                matchingService.matchJob(job.getId(), List.of(resume.getId()), job.getDepartment(), null);
+                log.info("Successfully associated and evaluated resume ID {} for job ID {}", resume.getId(), job.getId());
+            } catch (MatchingRequirementsNotFoundException e) {
+                log.warn("Job ID {} has no canonical skill requirements yet; resume ID {} ingested without initial match.", job.getId(), resume.getId());
+            }
+        }
+
         return ResumeUploadResponse.fromEntity(resume, extractedSkills);
+    }
+
+    @Transactional
+    public ResumeUploadResponse ingestRawText(String rawText, String name, String email) {
+        return ingestRawText(rawText, null, name, email);
     }
 
     @Transactional(readOnly = true)

@@ -1,5 +1,6 @@
 package com.fairhire.controllers;
 
+import com.fairhire.dto.CandidateSelfScreenResponseDto;
 import com.fairhire.dto.MatchBatchResponseDto;
 import com.fairhire.dto.MatchDetailResponseDto;
 import com.fairhire.dto.MatchRequestDto;
@@ -154,6 +155,46 @@ public class JobMatchingController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
                     "status", 404,
                     "error", "RESOURCE_NOT_FOUND",
+                    "message", e.getMessage()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", 500,
+                    "error", "INTERNAL_SERVER_ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Candidate-facing transparent self-screening endpoint.
+     * Evaluates candidate fit against an active job without requiring recruiter authorization
+     * and without creating or mutating recruiter applicant records.
+     */
+    @PostMapping({"/api/v1/jobs/{jobId}/self-screen/{resumeId}", "/api/jobs/{jobId}/self-screen/{resumeId}"})
+    public ResponseEntity<?> selfScreenCandidate(
+            @PathVariable("jobId") Long jobId,
+            @PathVariable("resumeId") Long resumeId
+    ) {
+        try {
+            CandidateSelfScreenResponseDto result = matchingService.selfScreen(jobId, resumeId);
+            return ResponseEntity.ok(result);
+        } catch (MatchingRequirementsNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of(
+                    "status", 422,
+                    "error", "MATCHING_REQUIREMENTS_NOT_FOUND",
+                    "message", e.getMessage()
+            ));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                    "status", 404,
+                    "error", "RESOURCE_NOT_FOUND",
+                    "message", e.getMessage()
+            ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                    "status", 400,
+                    "error", "INVALID_SELF_SCREEN_STATE",
                     "message", e.getMessage()
             ));
         } catch (Exception e) {

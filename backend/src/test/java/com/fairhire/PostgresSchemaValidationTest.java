@@ -16,9 +16,9 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest(classes = FairHireApplication.class)
 @EnabledIf("isPostgresAvailable")
 @TestPropertySource(properties = {
-    "spring.datasource.url=${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/fairhire_db}",
-    "spring.datasource.username=postgres",
-    "spring.datasource.password=postgres",
+    "spring.datasource.url=${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/fairhire_demo_db}",
+    "spring.datasource.username=${SPRING_DATASOURCE_USERNAME:postgres}",
+    "spring.datasource.password=${SPRING_DATASOURCE_PASSWORD:postgres}",
     "spring.datasource.driverClassName=org.postgresql.Driver",
     "spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect",
     "spring.jpa.hibernate.ddl-auto=validate",
@@ -32,8 +32,13 @@ class PostgresSchemaValidationTest {
     private JdbcTemplate jdbcTemplate;
 
     static boolean isPostgresAvailable() {
-        String url = System.getenv().getOrDefault("SPRING_DATASOURCE_URL", "jdbc:postgresql://localhost:5432/fairhire_db");
-        try (Connection conn = DriverManager.getConnection(url, "postgres", "postgres")) {
+        String url = System.getenv().getOrDefault("SPRING_DATASOURCE_URL",
+                System.getProperty("SPRING_DATASOURCE_URL", "jdbc:postgresql://localhost:5432/fairhire_demo_db"));
+        String user = System.getenv().getOrDefault("SPRING_DATASOURCE_USERNAME",
+                System.getProperty("SPRING_DATASOURCE_USERNAME", "postgres"));
+        String pass = System.getenv().getOrDefault("SPRING_DATASOURCE_PASSWORD",
+                System.getProperty("SPRING_DATASOURCE_PASSWORD", "postgres"));
+        try (Connection conn = DriverManager.getConnection(url, user, pass)) {
             return true;
         } catch (Exception e) {
             return false;
