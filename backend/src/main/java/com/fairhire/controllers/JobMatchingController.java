@@ -103,10 +103,11 @@ public class JobMatchingController {
     @GetMapping({"/api/v1/jobs/{jobId}/matches", "/api/jobs/{jobId}/matches"})
     public ResponseEntity<?> getJobMatches(
             @PathVariable("jobId") Long jobId,
+            @RequestParam(value = "screeningMode", required = false) String screeningMode,
             @RequestHeader(value = "X-Department", required = false) String headerDepartment
     ) {
         try {
-            List<MatchResponseDto> results = matchingService.getJobMatches(jobId, headerDepartment);
+            List<MatchResponseDto> results = matchingService.getJobMatches(jobId, headerDepartment, screeningMode);
             return ResponseEntity.ok(Map.of(
                     "job_id", jobId,
                     "total_evaluated", results.size(),
@@ -195,6 +196,45 @@ public class JobMatchingController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                     "status", 400,
                     "error", "INVALID_SELF_SCREEN_STATE",
+                    "message", e.getMessage()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", 500,
+                    "error", "INTERNAL_SERVER_ERROR",
+                    "message", e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Public candidate job application endpoint.
+     * Evaluates and records the applicant's match against an active job.
+     */
+    @PostMapping({"/api/v1/jobs/{jobId}/apply/{resumeId}", "/api/jobs/{jobId}/apply/{resumeId}"})
+    public ResponseEntity<?> applyCandidate(
+            @PathVariable("jobId") Long jobId,
+            @PathVariable("resumeId") Long resumeId
+    ) {
+        try {
+            MatchBatchResponseDto result = matchingService.applyCandidate(jobId, resumeId);
+            return ResponseEntity.ok(result);
+        } catch (MatchingRequirementsNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of(
+                    "status", 422,
+                    "error", "MATCHING_REQUIREMENTS_NOT_FOUND",
+                    "message", e.getMessage()
+            ));
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of(
+                    "status", 404,
+                    "error", "RESOURCE_NOT_FOUND",
+                    "message", e.getMessage()
+            ));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
+                    "status", 400,
+                    "error", "INVALID_APPLICATION_STATE",
                     "message", e.getMessage()
             ));
         } catch (Exception e) {

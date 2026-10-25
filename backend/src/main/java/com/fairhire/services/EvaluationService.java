@@ -150,22 +150,80 @@ public class EvaluationService {
     @Transactional(readOnly = true)
     public String generateCsvReport(Long jobId) {
         StringBuilder sb = new StringBuilder();
-        sb.append("Match ID,Job ID,Candidate Name,Keyword ATS Score,Semantic S-BERT Score,Final Score,Normal Rank,Blind Rank\n");
+        sb.append("Match ID,Job ID,Requisition Title,Candidate Name,Candidate Email,Years Experience,Keyword ATS Score,Semantic S-BERT Score,Final Composite Score,Normal Rank,Blind Rank,Rank Shift,Matched Skills\n");
 
-        var matches = jobId != null
-                ? matchResultRepository.findByJobIdAndScreeningModeOrderByRankInPoolAsc(jobId, ScreeningMode.NORMAL)
-                : matchResultRepository.findAll();
+        List<MatchResult> matches;
+        if (jobId != null) {
+            matches = matchResultRepository.findByJobIdAndScreeningModeOrderByRankInPoolAsc(jobId, ScreeningMode.NORMAL);
+            if (matches.isEmpty()) {
+                matches = matchResultRepository.findByJobIdOrderByRankInPoolAsc(jobId);
+            }
+        } else {
+            matches = matchResultRepository.findAll();
+        }
 
-        for (var m : matches) {
+        Map<Long, Integer> blindRanks = new HashMap<>();
+        if (jobId != null) {
+            try {
+                List<MatchResult> blindMatches = matchResultRepository.findByJobIdAndScreeningModeOrderByRankInPoolAsc(jobId, ScreeningMode.BLIND);
+                for (MatchResult bm : blindMatches) {
+                    if (bm.getResume() != null) {
+                        blindRanks.put(bm.getResume().getId(), bm.getRankInPool());
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        for (MatchResult m : matches) {
+            Long resumeId = m.getResume() != null ? m.getResume().getId() : null;
+            int nRank = m.getRankInPool() != null ? m.getRankInPool() : 1;
+            int bRank = (resumeId != null && blindRanks.containsKey(resumeId)) ? blindRanks.get(resumeId) : nRank;
+            int shift = Math.abs(nRank - bRank);
+
+            double kw = m.getKeywordScore() != null ? m.getKeywordScore().doubleValue() :
+                        (m.getOverallScore() != null ? m.getOverallScore().doubleValue() / 100.0 : 0.0);
+            double sem = m.getSemanticScore() != null ? m.getSemanticScore().doubleValue() : 0.0;
+            double fin = m.getFinalCompositeScore() != null ? m.getFinalCompositeScore().doubleValue() :
+                        (m.getOverallScore() != null ? m.getOverallScore().doubleValue() / 100.0 : 0.0);
+
+            String kwStr = String.format(Locale.US, "%.1f%%", kw <= 1.0 ? kw * 100.0 : kw);
+            String semStr = String.format(Locale.US, "%.1f%%", sem <= 1.0 ? sem * 100.0 : sem);
+            String finStr = String.format(Locale.US, "%.1f%%", fin <= 1.0 ? fin * 100.0 : fin);
+
+            String candidateName = m.getCandidate() != null ? m.getCandidate().getFullName() : "Candidate #" + m.getId();
+            String candidateEmail = m.getCandidate() != null && m.getCandidate().getEmail() != null ? m.getCandidate().getEmail() : "";
+            String jobTitle = m.getJob() != null && m.getJob().getTitle() != null ? m.getJob().getTitle() : "Requisition #" + (m.getJob() != null ? m.getJob().getId() : "");
+            int exp = m.getResume() != null && m.getResume().getYearsExperience() != null ? m.getResume().getYearsExperience().intValue() : 0;
+
+            String skills = "";
+            if (m.getResume() != null && m.getResume().getResumeSkills() != null) {
+                skills = m.getResume().getResumeSkills().stream()
+                        .map(rs -> rs.getSkill().getName())
+                        .reduce((a, b) -> a + "; " + b).orElse("");
+            }
+
             sb.append(m.getId()).append(",")
-              .append(m.getJob().getId()).append(",")
-              .append("\"").append(m.getCandidate().getFullName()).append("\",")
-              .append(m.getKeywordScore()).append(",")
-              .append(m.getSemanticScore()).append(",")
-              .append(m.getFinalCompositeScore()).append(",")
-              .append(m.getRankInPool()).append(",")
-              .append(m.getRankInPool()).append("\n");
+              .append(m.getJob() != null ? m.getJob().getId() : "").append(",")
+              .append(escapeCsv(jobTitle)).append(",")
+              .append(escapeCsv(candidateName)).append(",")
+              .append(escapeCsv(candidateEmail)).append(",")
+              .append(exp).append(",")
+              .append(kwStr).append(",")
+              .append(semStr).append(",")
+              .append(finStr).append(",")
+              .append(nRank).append(",")
+              .append(bRank).append(",")
+              .append(shift).append(",")
+              .append(escapeCsv(skills)).append("\n");
         }
         return sb.toString();
+    }
+
+    private String escapeCsv(String val) {
+        if (val == null) return "";
+        if (val.contains(",") || val.contains("\"") || val.contains("\n") || val.contains("\r")) {
+            return "\"" + val.replace("\"", "\"\"") + "\"";
+        }
+        return val;
     }
 }

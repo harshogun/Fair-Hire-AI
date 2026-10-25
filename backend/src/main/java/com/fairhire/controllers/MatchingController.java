@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/matching")
+@RequestMapping({"/api/matching", "/api/v1/matching"})
 @CrossOrigin(origins = "*")
 public class MatchingController {
 
@@ -21,9 +21,9 @@ public class MatchingController {
     public ResponseEntity<?> runMatching(@PathVariable Long jobId, @RequestBody(required = false) Map<String, Object> body) {
         try {
             Double kw = body != null && body.containsKey("keyword_weight")
-                    ? ((Number) body.get("keyword_weight")).doubleValue() : 0.3;
+                    ? ((Number) body.get("keyword_weight")).doubleValue() : 0.8;
             Double sem = body != null && body.containsKey("semantic_weight")
-                    ? ((Number) body.get("semantic_weight")).doubleValue() : 0.7;
+                    ? ((Number) body.get("semantic_weight")).doubleValue() : 0.2;
 
             var results = matchingService.runJobMatching(jobId, kw, sem);
             return ResponseEntity.ok(Map.of(

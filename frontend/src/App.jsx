@@ -59,6 +59,7 @@ export function App() {
     return typeof window !== "undefined" ? window.location.pathname : "/candidate"
   })
   const [currentRunId, setCurrentRunId] = useState(null)
+  const [prefilledSampleIndex, setPrefilledSampleIndex] = useState(null)
 
   // HTML5 History router navigation
   const navigate = (to, { replace = false } = {}) => {
@@ -71,7 +72,7 @@ export function App() {
     else if (to === "admin") target = "/admin/research"
     else if (to === "architecture") target = "/architecture"
     else if (to === "studio") target = "/studio"
-    else if (to === "results") target = "/results"
+    else if (to === "results") target = currentRunId ? `/results/${currentRunId}` : "/results"
     else if (to === "landing") target = "/candidate"
 
     if (replace) {
@@ -178,12 +179,18 @@ export function App() {
 
   const handleScreeningComplete = (runId) => {
     setCurrentRunId(runId)
-    navigate("/results")
+    if (runId && typeof window !== "undefined") {
+      sessionStorage.setItem("fairhire_last_run_id", String(runId))
+    }
+    navigate(`/results/${runId}`)
   }
 
   const handleSelectRun = (runId) => {
     setCurrentRunId(runId)
-    navigate("/results")
+    if (runId && typeof window !== "undefined") {
+      sessionStorage.setItem("fairhire_last_run_id", String(runId))
+    }
+    navigate(`/results/${runId}`)
   }
 
   return (
@@ -287,7 +294,7 @@ export function App() {
           {currentRoute.name === "results" && (
             isAuthenticated ? (
               <ResultsDashboard
-                runId={currentRunId}
+                runId={currentRoute.runId || currentRunId}
                 setActiveView={navigate}
               />
             ) : (

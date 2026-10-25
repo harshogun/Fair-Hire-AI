@@ -1,5 +1,5 @@
 import React from "react"
-import { Layers, Activity } from "lucide-react"
+import { Layers } from "lucide-react"
 
 export function Footer({ setActiveView }) {
   return (
@@ -14,7 +14,7 @@ export function Footer({ setActiveView }) {
             </div>
             <span className="font-heading text-lg font-bold text-slate-900 dark:text-white tracking-tight">FairHire AI</span>
             <span className="text-[10px] font-mono font-semibold bg-indigo-50 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 px-2 py-0.5 rounded-full">
-              v2.0
+              v2.5
             </span>
           </div>
           <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed max-w-sm">
@@ -78,14 +78,10 @@ export function Footer({ setActiveView }) {
         <div>
           &copy; 2026 FairHire AI. Research by Harsh More &amp; Saloni Paygude (Guide: Prof. Kirti Garud).
         </div>
-        <div className="flex items-center gap-4 text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-emerald-500" />
-            Port 5000 REST: OK
-          </span>
-          <span className="text-slate-300 dark:text-slate-600">&bull;</span>
-          <span className="text-indigo-600 dark:text-indigo-300">
-            React 19 + Tailwind CSS v4 + S-BERT
+        <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
+          <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            All Systems Operational
           </span>
         </div>
       </div>

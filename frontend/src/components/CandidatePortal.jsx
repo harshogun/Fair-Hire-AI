@@ -4,6 +4,7 @@ import {
   fetchJobs as apiFetchJobs,
   uploadResume as apiUploadResume,
   selfScreenCandidate as apiSelfScreenCandidate,
+  applyToJob as apiApplyToJob,
   getStoredUser,
   MAX_RESUME_FILE_SIZE_BYTES
 } from "../services/api"
@@ -17,6 +18,7 @@ export function CandidatePortal({ onNavigate }) {
   const [uploadFile, setUploadFile] = useState(null)
   const [evaluating, setEvaluating] = useState(false)
   const [matchResult, setMatchResult] = useState(null)
+  const [applicationSubmitted, setApplicationSubmitted] = useState(false)
   const [errorMsg, setErrorMsg] = useState(null)
   const currentUser = getStoredUser()
   const isRecruiter = !!currentUser
@@ -56,6 +58,7 @@ export function CandidatePortal({ onNavigate }) {
     setEvaluating(true)
     setErrorMsg(null)
     setMatchResult(null)
+    setApplicationSubmitted(false)
 
     try {
       // 1. Upload/parse resume via typed API helper without jobId
@@ -88,6 +91,14 @@ export function CandidatePortal({ onNavigate }) {
       } catch (selfScreenErr) {
         console.warn("Candidate self-screening notice:", selfScreenErr)
         setErrorMsg("Candidate self-screening error: " + selfScreenErr.message)
+      }
+
+      // 3. Automatically enroll candidate into recruiter's active applicant rankings for target job
+      try {
+        await apiApplyToJob(selectedJobId, resumeId)
+        setApplicationSubmitted(true)
+      } catch (applyErr) {
+        console.warn("Application enrollment notice:", applyErr)
       }
     } catch (err) {
       console.error("Evaluation error:", err)
@@ -238,6 +249,18 @@ export function CandidatePortal({ onNavigate }) {
                   Rank #{matchResult.normal_rank || 1}
                 </span>
               </div>
+
+              {applicationSubmitted && (
+                <div className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">Application Registered & Enrolled!</span>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                      Your profile and ATS match score are now automatically visible in the recruiter candidate rankings for this requisition.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {(() => {
                 const finalRaw = matchResult.final_score != null ? Number(matchResult.final_score) : (matchResult.overall_score != null ? Number(matchResult.overall_score) : 0);

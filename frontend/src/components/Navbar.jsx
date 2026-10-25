@@ -173,11 +173,6 @@ export function Navbar({
             )}
           </button>
 
-          <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-white/[0.02] text-[11px] font-mono text-slate-500 dark:text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span>REST API Active</span>
-          </div>
-
           {isAuthenticated ? (
             <div className="flex items-center gap-2">
               <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/80 dark:bg-indigo-950/40 text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">

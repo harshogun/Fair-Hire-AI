@@ -3,11 +3,12 @@ import {
   Printer, RefreshCw, Plus, Award, 
   BarChart3, FileText, AlertTriangle, 
   Search, X, Eye, ShieldCheck, Copy, Check,
-  Cpu, FileSpreadsheet
+  Cpu, FileSpreadsheet, ArrowLeft
 } from "lucide-react"
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 import { FairnessGauge } from "./ui/gauge"
+import { downloadAuditCsv } from "../services/api"
 
 export function ResultsDashboard({ runId, setActiveView, onRescreenWithRewritten: _onRescreenWithRewritten }) {
   const [runData, setRunData] = useState(null)
@@ -17,13 +18,25 @@ export function ResultsDashboard({ runId, setActiveView, onRescreenWithRewritten
   const [isLoading, setIsLoading] = useState(true)
   const [copiedText, setCopiedText] = useState(false)
 
+  const effectiveRunId = runId || 
+    (typeof window !== "undefined" ? (
+      window.location.pathname.match(/\/results\/(\d+)/)?.[1] ||
+      new URLSearchParams(window.location.search).get("id") ||
+      new URLSearchParams(window.location.search).get("runId") ||
+      sessionStorage.getItem("fairhire_last_run_id")
+    ) : null)
+
   useEffect(() => {
-    if (!runId) return
+    if (!effectiveRunId) {
+      setIsLoading(false)
+      setRunData({ error: "No evaluation run ID specified. Please select a verified run from the Audit Ledger." })
+      return
+    }
     setIsLoading(true)
-    fetch(`/api/results/${runId}`)
+    fetch(`/api/results/${effectiveRunId}`)
       .then(res => {
         if (!res.ok) {
-          throw new Error(`Evaluation run not found (HTTP ${res.status})`)
+          throw new Error(`Evaluation run #${effectiveRunId} not found (HTTP ${res.status})`)
         }
         return res.json()
       })
@@ -36,7 +49,7 @@ export function ResultsDashboard({ runId, setActiveView, onRescreenWithRewritten
         setRunData({ error: err.message || "Failed to load evaluation run" })
         setIsLoading(false)
       })
-  }, [runId])
+  }, [effectiveRunId])
 
   if (isLoading) {
     return (
@@ -59,9 +72,15 @@ export function ResultsDashboard({ runId, setActiveView, onRescreenWithRewritten
         <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
           {runData?.error || "The requested evaluation record does not exist or was deleted from the local SQLite audit ledger."}
         </p>
-        <Button onClick={() => setActiveView("studio")} variant="default" size="sm">
-          Return to Screening Studio
-        </Button>
+        <div className="flex items-center justify-center gap-2 pt-2">
+          <Button onClick={() => setActiveView("/recruiter/audit")} variant="default" size="sm" className="flex items-center gap-1.5">
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Audit Ledger</span>
+          </Button>
+          <Button onClick={() => setActiveView("studio")} variant="outline" size="sm">
+            Launch Studio
+          </Button>
+        </div>
       </div>
     )
   }
@@ -120,14 +139,24 @@ export function ResultsDashboard({ runId, setActiveView, onRescreenWithRewritten
 
         {/* Action Toolbar */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <a
-            href={`/api/export/${runData.id}.csv`}
-            download
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setActiveView("/recruiter/audit")}
+            className="flex items-center gap-1.5 text-xs h-9 px-3.5 rounded-lg"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Audit Ledger</span>
+          </Button>
+
+          <button
+            type="button"
+            onClick={() => downloadAuditCsv(runData.id)}
             className="inline-flex items-center gap-1.5 h-9 px-3.5 text-xs font-semibold rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-700 transition-colors shadow-xs cursor-pointer"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>Export CSV</span>
-          </a>
+          </button>
 
           <Button
             size="sm"

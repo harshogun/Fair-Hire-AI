@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class JobService {
@@ -41,6 +42,11 @@ public class JobService {
 
     @Transactional
     public Job createJob(String title, String description, String requirements, Long createdBy) {
+        return createJob(title, description, requirements, createdBy, null);
+    }
+
+    @Transactional
+    public Job createJob(String title, String description, String requirements, Long createdBy, String department) {
         User creator = null;
         if (createdBy != null) {
             creator = userRepository.findById(createdBy).orElse(null);
@@ -53,6 +59,9 @@ public class JobService {
         }
 
         Job job = new Job(title.trim(), description.trim(), creator);
+        if (department != null && !department.isBlank()) {
+            job.setDepartment(department.trim());
+        }
         if (requirements != null && !requirements.isBlank()) {
             job.getRequirements().add(new JobRequirement(
                     job, RequirementType.GENERAL, requirements.trim(), RequirementNecessity.REQUIRED, new BigDecimal("1.000")
@@ -127,10 +136,16 @@ public class JobService {
 
     @Transactional
     public Map<String, Object> updateJob(Long id, String title, String description, String requirements) {
-        Job job = jobRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Job not found."));
+        return updateJob(id, title, description, requirements, null);
+    }
 
-        if (title != null) job.setTitle(title.trim());
+    @Transactional
+    public Map<String, Object> updateJob(Long id, String title, String description, String requirements, String department) {
+        Job job = jobRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Job with ID " + id + " not found."));
+
+        if (title != null && !title.isBlank()) job.setTitle(title.trim());
+        if (department != null && !department.isBlank()) job.setDepartment(department.trim());
         if (description != null) job.setDescription(description.trim());
         if (requirements != null) {
             job.getRequirements().clear();
@@ -139,6 +154,64 @@ public class JobService {
                         job, RequirementType.GENERAL, requirements.trim(), RequirementNecessity.REQUIRED, new BigDecimal("1.000")
                 ));
             }
+        }
+
+        String combinedText = ((job.getTitle() != null ? job.getTitle() : "") + "\n" +
+                               (job.getDescription() != null ? job.getDescription() : "") + "\n" +
+                               (requirements != null ? requirements : "")).toLowerCase();
+
+        // Safe synchronization of skills without unique constraint collision on (job_id, skill_id)
+        java.util.Set<Long> existingSkillIds = job.getJobSkills().stream()
+                .filter(js -> js.getSkill() != null && js.getSkill().getId() != null)
+                .map(js -> js.getSkill().getId())
+                .collect(java.util.stream.Collectors.toSet());
+
+        java.util.Set<Long> targetSkillIds = new java.util.HashSet<>();
+        List<Skill> allSkills = skillRepository.findAll();
+        for (Skill sk : allSkills) {
+            if (combinedText.contains(sk.getName().toLowerCase())) {
+                targetSkillIds.add(sk.getId());
+                if (!existingSkillIds.contains(sk.getId())) {
+                    job.getJobSkills().add(new JobSkill(job, sk));
+                }
+            }
+        }
+        job.getJobSkills().removeIf(js -> js.getSkill() != null && !targetSkillIds.contains(js.getSkill().getId()));
+
+        // Synchronize bias report on job update
+        try {
+            Map<String, Object> biasAnalysis = aiServiceClient.analyzeBias(combinedText);
+            if (biasAnalysis != null && !biasAnalysis.containsKey("error")) {
+                job.getBiasReports().clear();
+                BigDecimal genderScore = BigDecimal.valueOf(((Number) biasAnalysis.getOrDefault("gender_bias_score", 0.0)).doubleValue());
+                BigDecimal ageScore = BigDecimal.valueOf(((Number) biasAnalysis.getOrDefault("age_bias_score", 0.0)).doubleValue());
+                BigDecimal fleschScore = BigDecimal.valueOf(((Number) biasAnalysis.getOrDefault("flesch_reading_ease", 60.0)).doubleValue());
+
+                BiasReport report = new BiasReport(
+                        job, BiasTargetVersion.ORIGINAL, genderScore,
+                        GenderLean.BALANCED, ageScore, fleschScore, ReadingLevel.MODERATE
+                );
+
+                Object flaggedWordsObj = biasAnalysis.get("flagged_words");
+                if (flaggedWordsObj instanceof List<?> flaggedList) {
+                    for (Object item : flaggedList) {
+                        if (item instanceof Map<?, ?> map) {
+                            String word = String.valueOf(map.get("word"));
+                            String cat = String.valueOf(map.get("category"));
+                            Object suggObj = map.get("suggestions");
+                            String sugg = suggObj != null ? String.valueOf(suggObj) : "Consider neutral alternative";
+                            RewriteCategory rwCat = cat.toUpperCase().contains("GENDER") ? RewriteCategory.GENDER_MASCULINE : RewriteCategory.AGE_EXCLUSIONARY;
+                            report.getRewriteSuggestions().add(new RewriteSuggestion(
+                                    report, word, sugg, rwCat, word, true
+                            ));
+                        }
+                    }
+                    report.setTotalFlaggedTerms(report.getRewriteSuggestions().size());
+                }
+                job.getBiasReports().add(report);
+            }
+        } catch (Exception e) {
+            log.warn("[JobService] Bias analysis update failed for job '{}': {}", job.getTitle(), e.getMessage());
         }
 
         // Atomically invalidate existing match results for this job
@@ -266,7 +339,10 @@ public class JobService {
                 : List.of();
 
         String reqStr = job.getRequirements().isEmpty() ? "" :
-                job.getRequirements().get(0).getRequirementValue();
+                job.getRequirements().stream()
+                        .map(JobRequirement::getRequirementValue)
+                        .filter(s -> s != null && !s.isBlank())
+                        .collect(Collectors.joining("\n"));
 
         Map<String, Object> dto = new LinkedHashMap<>();
         dto.put("id", job.getId());

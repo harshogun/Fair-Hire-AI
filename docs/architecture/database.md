@@ -79,7 +79,7 @@ Structured qualifications and requirements parsed or authored for a job posting.
 | `id` | `BIGSERIAL` | `PRIMARY KEY` | Unique requirement ID |
 | `job_id` | `BIGINT` | `NOT NULL`, `FK -> jobs(id) ON DELETE CASCADE` | Associated job posting |
 | `requirement_type` | `VARCHAR(50)` | `NOT NULL`, `CHECK (requirement_type IN ('EXPERIENCE_YEARS', 'EDUCATION_LEVEL', 'CERTIFICATION', 'LANGUAGE', 'GENERAL'))` | Qualification category |
-| `requirement_value` | `VARCHAR(255)` | `NOT NULL` | Explicit requirement description |
+| `requirement_value` | `TEXT` | `NOT NULL` | Explicit requirement description |
 | `necessity` | `VARCHAR(20)` | `NOT NULL DEFAULT 'REQUIRED'`, `CHECK (necessity IN ('REQUIRED', 'PREFERRED'))` | Requirement necessity |
 | `weight` | `NUMERIC(3, 2)` | `NOT NULL DEFAULT 1.0 CHECK (weight >= 0.0 AND weight <= 1.0)` | Scoring weight factor |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT CURRENT_TIMESTAMP` | Timestamp created |

@@ -168,6 +168,47 @@ export async function createJob({ title, description, requirements }) {
 }
 
 /**
+ * Update an existing job description, requirements, or department.
+ */
+export async function updateJob(id, { title, description, requirements, department }) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/jobs/${id}`, {
+    method: "PUT",
+    headers,
+    body: JSON.stringify({ title, description, requirements, department })
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      logoutRecruiter();
+      throw new Error("Authentication session expired or unauthorized. Please sign in as a recruiter.");
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to update job (HTTP ${res.status})`);
+  }
+  return res.json();
+}
+
+/**
+ * Delete a job requisition and its associated match/screening data.
+ */
+export async function deleteJob(id) {
+  const headers = await getAuthHeaders();
+  const res = await fetch(`${API_BASE}/jobs/${id}`, {
+    method: "DELETE",
+    headers
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      logoutRecruiter();
+      throw new Error("Authentication session expired or unauthorized. Please sign in as a recruiter.");
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to delete job (HTTP ${res.status})`);
+  }
+  return res.json();
+}
+
+/**
  * Fetch all parsed resumes from the candidate pool.
  */
 export async function fetchResumes() {
@@ -268,6 +309,21 @@ export async function selfScreenCandidate(jobId, resumeId) {
 }
 
 /**
+ * Public candidate job application.
+ * Evaluates candidate against target job requirements and enlists profile into the recruiter's applicant pool.
+ */
+export async function applyToJob(jobId, resumeId) {
+  const res = await fetch(`${API_BASE}/jobs/${jobId}/apply/${resumeId}`, {
+    method: "POST"
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.detail || err.error || `Job application failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
  * Execute Phase 4 Deterministic Matching for a job.
  * Runs CANONICAL_SKILL_COVERAGE engine against the candidate pool.
  * Accepts optional explicit resumeIds array.
@@ -294,6 +350,32 @@ export async function runJobMatches(jobId, screeningMode = "NORMAL", resumeIds =
     }
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || err.error || `Matching execution failed with status ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Dynamically re-calculate candidate scores and re-rank applicant pool using configured ATS weights
+ * (balancing keyword skill overlap vs. neural semantic S-BERT embeddings).
+ */
+export async function applyAtsScoringWeights(jobId, keywordWeight = 0.8, semanticWeight = 0.2) {
+  const headers = await getAuthHeaders();
+  headers["Content-Type"] = "application/json";
+  const res = await fetch(`${API_BASE}/matching/${jobId}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      keyword_weight: keywordWeight,
+      semantic_weight: semanticWeight
+    })
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      logoutRecruiter();
+      throw new Error("Authentication session expired or unauthorized. Please sign in as a recruiter.");
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || err.error || `Failed to apply ATS weights (HTTP ${res.status})`);
   }
   return res.json();
 }
@@ -359,11 +441,25 @@ export async function fetchAuditHistory() {
  */
 export async function deleteAuditRecord(id) {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${API_BASE}/history/${id}`, {
+  let res = await fetch(`${API_BASE}/history/${id}`, {
     method: "DELETE",
     headers
   });
+  if (!res.ok && (res.status === 401 || res.status === 403 || res.status === 404)) {
+    // Fall back to /jobs/{id} if /history rejected or not found
+    const jobRes = await fetch(`${API_BASE}/jobs/${id}`, {
+      method: "DELETE",
+      headers
+    });
+    if (jobRes.ok) {
+      return jobRes.json();
+    }
+  }
   if (!res.ok) {
+    if (res.status === 401) {
+      logoutRecruiter();
+      throw new Error("Authentication session expired or unauthorized. Please sign in as a recruiter.");
+    }
     const err = await res.json().catch(() => ({}));
     throw new Error(err.message || err.error || `Failed to delete audit record (HTTP ${res.status})`);
   }
@@ -406,5 +502,34 @@ export async function fetchResearchExperiments() {
     throw new Error(err.message || err.error || `Failed to load experiments (HTTP ${res.status})`);
   }
   return res.json();
+}
+
+/**
+ * Download Verified Audit CSV report directly via Blob with seamless fallback.
+ */
+export async function downloadAuditCsv(jobId) {
+  const url = jobId ? `${API_BASE}/export/${jobId}.csv` : `${API_BASE}/export.csv`;
+  try {
+    const token = getAuthToken();
+    const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      throw new Error(`Failed to download CSV (HTTP ${res.status})`);
+    }
+    const blob = await res.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = jobId ? `fairhire_audit_run_${jobId}.csv` : "fairhire_audit_report.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+    return true;
+  } catch (err) {
+    console.warn("Direct blob download failed, redirecting to URL:", err);
+    window.location.href = url;
+    return false;
+  }
 }
 

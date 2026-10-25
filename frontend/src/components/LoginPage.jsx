@@ -30,7 +30,7 @@ export function LoginPage({ onLoginSuccess, onNavigatePublic }) {
       if (msg.includes("401") || msg.toLowerCase().includes("invalid")) {
         setErrorMessage("Invalid email or password. Please verify your recruiter credentials.")
       } else if (msg.toLowerCase().includes("failed to fetch") || msg.toLowerCase().includes("connect")) {
-        setErrorMessage("Authentication service unreachable. Please ensure the backend server is running on port 8088.")
+        setErrorMessage("Authentication service is temporarily unreachable. Please check your connection and try again.")
       } else {
         setErrorMessage(msg)
       }

@@ -3,7 +3,7 @@ import { Search, Trash2, ArrowRight, History, Plus, FileSpreadsheet, AlertCircle
 import { Button } from "./ui/button"
 import { Card } from "./ui/card"
 import { Badge } from "./ui/badge"
-import { fetchAuditHistory, deleteAuditRecord } from "../services/api"
+import { fetchAuditHistory, deleteAuditRecord, downloadAuditCsv } from "../services/api"
 
 export function AuditHistory({ onSelectRun, setActiveView }) {
   const [runs, setRuns] = useState([])
@@ -222,14 +222,14 @@ export function AuditHistory({ onSelectRun, setActiveView }) {
 
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <a
-                          href={`/api/export/${r.id}.csv`}
-                          download
+                        <button
+                          type="button"
+                          onClick={() => downloadAuditCsv(r.id)}
                           title="Download Audit CSV"
-                          className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.08] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-white/10 transition-colors"
+                          className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/[0.03] hover:bg-slate-200 dark:hover:bg-white/[0.08] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
                         >
                           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                        </a>
+                        </button>
 
                         <button
                           onClick={() => onSelectRun(r.id)}

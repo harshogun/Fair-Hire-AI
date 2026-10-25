@@ -15,6 +15,12 @@ public interface MatchResultRepository extends JpaRepository<MatchResult, Long> 
 
     List<MatchResult> findByJobIdAndScreeningModeOrderByRankInPoolAsc(Long jobId, ScreeningMode screeningMode);
 
+    List<MatchResult> findByJobIdAndScreeningModeAndMatchingMethodOrderByRankInPoolAsc(
+            Long jobId, ScreeningMode screeningMode, MatchingMethod matchingMethod);
+
+    List<MatchResult> findByJobIdAndScreeningModeAndMatchingMethodOrderByOverallScoreDesc(
+            Long jobId, ScreeningMode screeningMode, MatchingMethod matchingMethod);
+
     Optional<MatchResult> findByJobIdAndResumeIdAndScreeningModeAndMatchingMethod(
             Long jobId, Long resumeId, ScreeningMode screeningMode, MatchingMethod matchingMethod);
 

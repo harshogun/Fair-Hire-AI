@@ -48,8 +48,9 @@ export function parseRoute(pathname) {
   if (cleanPath === "/studio") {
     return { name: "studio" }
   }
-  if (cleanPath === "/results") {
-    return { name: "results" }
+  const resultsMatch = cleanPath.match(/^\/results(?:\/(\d+))?$/)
+  if (resultsMatch) {
+    return { name: "results", runId: resultsMatch[1] || null }
   }
   return { name: "not-found", path: cleanPath }
 }

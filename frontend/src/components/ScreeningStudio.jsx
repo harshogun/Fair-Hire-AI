@@ -6,8 +6,27 @@ import {
 import { Button } from "./ui/button"
 import { Badge } from "./ui/badge"
 
+const DEFAULT_SAMPLE_JDS = [
+  {
+    title: "Backend Python Developer (Biased Draft)",
+    text: "We are looking for an aggressive, dominant rockstar developer who is fearless and headstrong enough to lead our backend team single-handedly. Must be a competitive, independent ninja with strong Python, Django, REST API, and SQL skills. The ideal candidate is a decisive leader who dominates technical discussions."
+  },
+  {
+    title: "Backend Python Developer (Rewritten Draft)",
+    text: "We are looking for a proactive, driven, skilled professional who is confident and focused enough to guide our backend team. Must be a goal-oriented, self-directed expert with strong Python, Django, REST API, and SQL skills. The ideal candidate is a clear-thinking coordinator who contributes to technical discussions."
+  },
+  {
+    title: "Data Analyst - Entry Level",
+    text: "We need a collaborative and supportive data analyst who is understanding of business stakeholders. The candidate should be dependable, warm, and nurturing when mentoring junior team members, with strong skills in SQL, Excel, Python, Pandas, NumPy, and data visualization using Tableau or Power BI."
+  },
+  {
+    title: "Software Engineering Intern (Neutral Draft)",
+    text: "We are hiring a software engineering intern with a foundation in Python, Java, or C++, familiarity with data structures and algorithms, and basic knowledge of REST APIs, SQL, and Git. Experience with Django or Flask is a plus. Strong communication and problem-solving skills are required."
+  }
+]
+
 export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
-  const [sampleJDs, setSampleJDs] = useState([])
+  const [sampleJDs, setSampleJDs] = useState(DEFAULT_SAMPLE_JDS)
   const [selectedPresetIndex, setSelectedPresetIndex] = useState(null)
   const [jdTitle, setJdTitle] = useState("")
   const [jdText, setJdText] = useState("")
@@ -23,10 +42,10 @@ export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
 
   const selectPreset = (list, idx) => {
     setSelectedPresetIndex(idx)
-    const target = list[idx]
+    const target = Array.isArray(list) ? list[idx] : DEFAULT_SAMPLE_JDS[idx]
     if (target) {
-      setJdTitle(target.title)
-      setJdText(target.text)
+      setJdTitle(target.title || "")
+      setJdText(target.text || "")
     }
   }
 
@@ -34,23 +53,33 @@ export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
   useEffect(() => {
     let ignore = false
     fetch("/api/sample-jds")
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("HTTP " + res.status)
+        return res.json()
+      })
       .then(data => {
-        if (!ignore) {
+        if (!ignore && Array.isArray(data) && data.length > 0) {
           setSampleJDs(data)
           if (prefilledSampleIndex !== null && data[prefilledSampleIndex]) {
             selectPreset(data, prefilledSampleIndex)
-          } else {
-            const savedCustom = sessionStorage.getItem("fairhire_custom_jd_text")
-            if (savedCustom) {
-              setJdTitle("Custom Sourced Role")
-              setJdText(savedCustom)
-              sessionStorage.removeItem("fairhire_custom_jd_text")
-            }
           }
         }
       })
-      .catch(err => console.error("Failed to fetch sample JDs:", err))
+      .catch(err => {
+        console.warn("Using bundled benchmark JD presets:", err)
+      })
+      .finally(() => {
+        if (!ignore) {
+          const savedCustom = sessionStorage.getItem("fairhire_custom_jd_text")
+          if (savedCustom) {
+            setJdTitle("Custom Sourced Role")
+            setJdText(savedCustom)
+            sessionStorage.removeItem("fairhire_custom_jd_text")
+          } else if (prefilledSampleIndex !== null && DEFAULT_SAMPLE_JDS[prefilledSampleIndex]) {
+            selectPreset(DEFAULT_SAMPLE_JDS, prefilledSampleIndex)
+          }
+        }
+      })
     return () => {
       ignore = true
     }
@@ -148,8 +177,14 @@ export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
     }, 1100)
 
     try {
+      const token = typeof localStorage !== "undefined" ? localStorage.getItem("fairhire_jwt_token") : null
+      const headers = {}
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`
+      }
       const res = await fetch("/api/run-comparison", {
         method: "POST",
+        headers,
         body: formData,
       })
       const data = await res.json()
@@ -243,7 +278,7 @@ export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
                   Load Pre-Calibrated Benchmark Roles (Optional):
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {sampleJDs.map((jd, idx) => (
+                  {(Array.isArray(sampleJDs) ? sampleJDs : DEFAULT_SAMPLE_JDS).map((jd, idx) => (
                     <div
                       key={idx}
                       onClick={() => selectPreset(sampleJDs, idx)}
@@ -316,48 +351,66 @@ export function ScreeningStudio({ onScreeningComplete, prefilledSampleIndex }) {
               </div>
 
               {/* In-place Word Neutralizer */}
-              {liveAnalysis && liveAnalysis.flagged_terms && liveAnalysis.flagged_terms.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-slate-950 border border-amber-200 dark:border-amber-500/25 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                      <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                      1-Click Word Neutralizer ({liveAnalysis.flagged_terms.length} flagged):
-                    </span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Click word to swap</span>
-                  </div>
+              {(() => {
+                const terms = (liveAnalysis?.flagged_terms && liveAnalysis.flagged_terms.length > 0)
+                  ? liveAnalysis.flagged_terms
+                  : (liveAnalysis?.flagged_words || []).map(w => ({
+                      word: w.word,
+                      neutral_alternative: w.suggestions || w.replacement || w.alternative || "neutral",
+                      category: w.category
+                    })).filter(t => t.word && t.neutral_alternative);
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {liveAnalysis.flagged_terms.map((t, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => replaceFlaggedWord(t.word, t.neutral_alternative)}
-                        className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950 border border-slate-200 dark:border-white/10 hover:border-emerald-400 text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 font-mono transition-all flex items-center gap-1 cursor-pointer shadow-sm"
-                        title={`Replace '${t.word}' with '${t.neutral_alternative}'`}
-                      >
-                        <span className="line-through text-rose-600 dark:text-rose-400">{t.word}</span>
-                        <span>&rarr;</span>
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold">{t.neutral_alternative}</span>
-                      </button>
-                    ))}
+                if (!terms || terms.length === 0) return null;
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-slate-950 border border-amber-200 dark:border-amber-500/25 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        <ShieldAlert className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        1-Click Word Neutralizer ({terms.length} flagged):
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Click word to swap</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {terms.map((t, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => replaceFlaggedWord(t.word, t.neutral_alternative)}
+                          className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 hover:bg-emerald-50 dark:hover:bg-emerald-950 border border-slate-200 dark:border-white/10 hover:border-emerald-400 text-xs text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 font-mono transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                          title={`Replace '${t.word}' with '${t.neutral_alternative}'`}
+                        >
+                          <span className="line-through text-rose-600 dark:text-rose-400">{t.word}</span>
+                          <span>&rarr;</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-bold">{t.neutral_alternative}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Detected Skills */}
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-white/[0.05] space-y-1.5">
                 <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 font-mono">
                   <span>Detected Technical Skills:</span>
-                  <span>{liveAnalysis?.readability?.level ? `Readability: ${liveAnalysis.readability.level}` : "Parsing..."}</span>
+                  <span>{liveAnalysis?.readability?.level ? `Readability: ${liveAnalysis.readability.level}` : (wordCount > 0 ? "Analyzing..." : "Paste JD to parse")}</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {liveAnalysis?.skills && liveAnalysis.skills.length > 0 ? (
-                    liveAnalysis.skills.map((s, i) => (
+                  {(() => {
+                    const COMMON_SKILLS = ["Python", "Django", "Flask", "REST API", "SQL", "MySQL", "PostgreSQL", "React", "Docker", "Git", "AWS", "Java", "Spring Boot", "Pandas", "NumPy", "C++", "Linux", "Kubernetes", "TypeScript", "JavaScript", "HTML", "CSS", "Excel", "Tableau", "Power BI", "Machine Learning", "Microservices"];
+                    const skills = (liveAnalysis?.skills && liveAnalysis.skills.length > 0)
+                      ? liveAnalysis.skills
+                      : COMMON_SKILLS.filter(s => new RegExp(`\\b${s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(jdText));
+
+                    if (skills.length === 0) {
+                      return <span className="text-[11px] text-slate-400 font-mono">Skills detected in real time...</span>;
+                    }
+                    return skills.map((s, i) => (
                       <Badge key={i} variant="default" className="text-[10px] font-mono">{s}</Badge>
-                    ))
-                  ) : (
-                    <span className="text-[11px] text-slate-400 font-mono">Skills detected in real time...</span>
-                  )}
+                    ));
+                  })()}
                 </div>
               </div>
 

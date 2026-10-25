@@ -24,8 +24,9 @@ public class JobController {
             String title = String.valueOf(body.getOrDefault("title", ""));
             String description = String.valueOf(body.getOrDefault("description", ""));
             String requirements = body.get("requirements") != null ? String.valueOf(body.get("requirements")) : "";
+            String department = body.get("department") != null ? String.valueOf(body.get("department")) : null;
 
-            Job job = jobService.createJob(title, description, requirements, 1L);
+            Job job = jobService.createJob(title, description, requirements, 1L, department);
             return ResponseEntity.status(201).body(jobService.formatJobDto(job));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
@@ -52,8 +53,9 @@ public class JobController {
             String title = body.get("title") != null ? String.valueOf(body.get("title")) : null;
             String description = body.get("description") != null ? String.valueOf(body.get("description")) : null;
             String requirements = body.get("requirements") != null ? String.valueOf(body.get("requirements")) : null;
+            String department = body.get("department") != null ? String.valueOf(body.get("department")) : null;
 
-            var updated = jobService.updateJob(id, title, description, requirements);
+            var updated = jobService.updateJob(id, title, description, requirements, department);
             return ResponseEntity.ok(Map.of("message", "Job updated", "job", updated));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));

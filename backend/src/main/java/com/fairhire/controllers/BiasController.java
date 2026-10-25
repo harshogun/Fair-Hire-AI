@@ -4,7 +4,7 @@ import com.fairhire.services.BiasService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @CrossOrigin(origins = "*")
@@ -22,9 +22,25 @@ public class BiasController {
         if (text == null || text.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "Text is required."));
         }
-        Map<String, Object> result = biasService.analyzeText(text);
-        if ("SERVICE_UNAVAILABLE".equals(result.get("status"))) {
-            return ResponseEntity.status(503).body(result);
+        Map<String, Object> rawResult = biasService.analyzeText(text);
+        if ("SERVICE_UNAVAILABLE".equals(rawResult.get("status"))) {
+            return ResponseEntity.status(503).body(rawResult);
+        }
+        Map<String, Object> result = new LinkedHashMap<>(rawResult);
+        if (result.containsKey("flagged_words") && !result.containsKey("flagged_terms")) {
+            List<?> words = (List<?>) result.get("flagged_words");
+            List<Map<String, Object>> terms = new ArrayList<>();
+            for (Object obj : words) {
+                if (obj instanceof Map<?, ?> m) {
+                    Map<String, Object> term = new LinkedHashMap<>();
+                    term.put("word", m.get("word"));
+                    Object alt = m.containsKey("suggestions") ? m.get("suggestions") : m.get("replacement");
+                    term.put("neutral_alternative", alt != null ? String.valueOf(alt) : "");
+                    term.put("category", m.get("category"));
+                    terms.add(term);
+                }
+            }
+            result.put("flagged_terms", terms);
         }
         return ResponseEntity.ok(result);
     }

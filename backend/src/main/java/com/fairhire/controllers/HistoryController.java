@@ -4,7 +4,9 @@ import com.fairhire.models.Job;
 import com.fairhire.models.MatchResult;
 import com.fairhire.repositories.JobRepository;
 import com.fairhire.repositories.MatchResultRepository;
+import com.fairhire.services.JobService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -24,10 +26,14 @@ public class HistoryController {
 
     private final JobRepository jobRepository;
     private final MatchResultRepository matchResultRepository;
+    private final JobService jobService;
 
-    public HistoryController(JobRepository jobRepository, MatchResultRepository matchResultRepository) {
+    public HistoryController(JobRepository jobRepository,
+                             MatchResultRepository matchResultRepository,
+                             JobService jobService) {
         this.jobRepository = jobRepository;
         this.matchResultRepository = matchResultRepository;
+        this.jobService = jobService;
     }
 
     /**
@@ -65,13 +71,16 @@ public class HistoryController {
 
     /**
      * Delete or clear match audit records for a run ID.
+     * Deletes the associated job requisition and cascades to match records.
      */
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<?> deleteAuditRecord(@PathVariable Long id) {
         if (!jobRepository.existsById(id)) {
             return ResponseEntity.status(404).body(Map.of("error", "Audit record not found for ID: " + id));
         }
         matchResultRepository.markStaleByJobId(id);
-        return ResponseEntity.ok(Map.of("message", "Audit record #" + id + " marked stale successfully."));
+        jobService.deleteJob(id);
+        return ResponseEntity.ok(Map.of("message", "Audit record #" + id + " marked stale and deleted successfully."));
     }
 }

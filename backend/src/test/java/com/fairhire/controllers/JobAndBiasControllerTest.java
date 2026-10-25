@@ -74,6 +74,30 @@ class JobAndBiasControllerTest {
     }
 
     @Test
+    void testCreateJobDescriptionWithLongRequirementsExceeding255Chars() throws Exception {
+        String longRequirements = "Bachelor's or Master's degree in Computer Science, Software Engineering, or related field. "
+                + "Minimum 5+ years of production experience designing, building, and deploying microservices using Java, Spring Boot, and Python. "
+                + "Extensive expertise in PostgreSQL database design, relational modeling, complex indexing, query optimization, and transaction boundaries. "
+                + "Proficient in Docker, Kubernetes, CI/CD automation pipelines, automated unit and integration testing, and cloud environments (AWS/GCP).";
+
+        Map<String, Object> jobPayload = Map.of(
+                "title", "Principal Infrastructure Architect",
+                "department", "Engineering",
+                "description", "Responsible for scalable cloud infrastructure, performance optimization, and developer productivity.",
+                "requirements", longRequirements
+        );
+
+        mockMvc.perform(post("/api/jobs")
+                        .header("Authorization", "Bearer " + jwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(jobPayload)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.title").value("Principal Infrastructure Architect"))
+                .andExpect(jsonPath("$.requirements").value(longRequirements))
+                .andExpect(jsonPath("$.id").isNumber());
+    }
+
+    @Test
     void testBiasAnalysisDirect() throws Exception {
         Map<String, String> biasPayload = Map.of(
                 "text", "We need a young, aggressive rockstar who can dominate the fast-paced market."

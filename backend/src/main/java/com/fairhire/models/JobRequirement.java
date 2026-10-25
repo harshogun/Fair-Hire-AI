@@ -21,7 +21,7 @@ public class JobRequirement {
     @Column(name = "requirement_type", nullable = false, length = 50)
     private RequirementType requirementType;
 
-    @Column(name = "requirement_value", nullable = false, length = 255)
+    @Column(name = "requirement_value", nullable = false, columnDefinition = "TEXT")
     private String requirementValue;
 
     @Enumerated(EnumType.STRING)

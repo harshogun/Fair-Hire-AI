@@ -531,17 +531,41 @@ public class SkillCoverageMatchingService {
     }
 
     /**
-     * Get all deterministic match results for a job with department authorization.
+     * Get deterministic match results for a job with department authorization and optional screening mode.
+     * Defaults to ScreeningMode.NORMAL to represent the standard candidate evaluation pool without duplicate blind rows.
      */
     @Transactional(readOnly = true)
-    public List<MatchResponseDto> getJobMatches(Long jobId, String callerDepartment) {
+    public List<MatchResponseDto> getJobMatches(Long jobId, String callerDepartment, String screeningModeStr) {
         Job job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("Job with ID " + jobId + " not found."));
         authorizationService.validateJobAccess(job, callerDepartment);
 
-        return matchResultRepository.findByJobIdAndMatchingMethodOrderByOverallScoreDesc(
-                jobId, MatchingMethod.CANONICAL_SKILL_COVERAGE
-        ).stream().map(this::mapToResponseDto).collect(Collectors.toList());
+        ScreeningMode screeningMode = parseScreeningMode(screeningModeStr);
+
+        List<MatchResult> results = matchResultRepository.findByJobIdAndScreeningModeAndMatchingMethodOrderByOverallScoreDesc(
+                jobId, screeningMode, MatchingMethod.CANONICAL_SKILL_COVERAGE
+        );
+        if (results.isEmpty() && screeningMode == ScreeningMode.NORMAL) {
+            results = matchResultRepository.findByJobIdAndScreeningModeOrderByRankInPoolAsc(jobId, ScreeningMode.NORMAL);
+        }
+
+        // Distinct by resume ID to strictly guarantee no duplicate candidate rankings are returned
+        Map<Long, MatchResult> distinctByResume = new LinkedHashMap<>();
+        for (MatchResult mr : results) {
+            if (mr.getResume() != null && mr.getResume().getId() != null) {
+                distinctByResume.putIfAbsent(mr.getResume().getId(), mr);
+            }
+        }
+
+        return distinctByResume.values().stream().map(this::mapToResponseDto).collect(Collectors.toList());
+    }
+
+    /**
+     * Get all deterministic match results for a job with department authorization (defaults to NORMAL screening).
+     */
+    @Transactional(readOnly = true)
+    public List<MatchResponseDto> getJobMatches(Long jobId, String callerDepartment) {
+        return getJobMatches(jobId, callerDepartment, null);
     }
 
     /**
@@ -549,7 +573,7 @@ public class SkillCoverageMatchingService {
      */
     @Transactional(readOnly = true)
     public List<MatchResponseDto> getJobMatches(Long jobId) {
-        return getJobMatches(jobId, null);
+        return getJobMatches(jobId, null, null);
     }
 
     /**
@@ -730,6 +754,44 @@ public class SkillCoverageMatchingService {
                 matchedSkills,
                 missingSkills
         );
+    }
+
+    /**
+     * Public candidate job application.
+     * Evaluates and enrolls an uploaded candidate resume into the target job requisition applicant pool.
+     */
+    public MatchBatchResponseDto applyCandidate(Long jobId, Long resumeId) {
+        if (jobId == null) {
+            throw new ResourceNotFoundException("Job ID cannot be null.");
+        }
+        if (resumeId == null) {
+            throw new ResourceNotFoundException("Resume ID cannot be null.");
+        }
+
+        Job job = jobRepository.findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("Job with ID " + jobId + " not found."));
+
+        if (job.getStatus() != JobStatus.ACTIVE) {
+            throw new IllegalStateException("Job ID " + jobId + " is not currently active for candidate applications.");
+        }
+
+        Resume resume = resumeRepository.findById(resumeId)
+                .orElseThrow(() -> new ResourceNotFoundException("Resume with ID " + resumeId + " not found."));
+
+        if (resume.getParsingStatus() != ParsingStatus.READY &&
+            resume.getParsingStatus() != ParsingStatus.PARSED &&
+            resume.getParsingStatus() != ParsingStatus.COMPLETED) {
+            throw new IllegalStateException("Resume parsing is incomplete or failed. Current status: " + resume.getParsingStatus());
+        }
+
+        synchronized (getJobLock(jobId)) {
+            return transactionTemplate.execute(status -> {
+                Set<Long> candidateBatch = new LinkedHashSet<>(matchResultRepository.findDistinctResumeIdsByJobId(job.getId()));
+                candidateBatch.add(resume.getId());
+
+                return executeMatchJob(jobId, new ArrayList<>(candidateBatch), job.getDepartment(), null, "NORMAL", MatchingMethod.CANONICAL_SKILL_COVERAGE.name());
+            });
+        }
     }
 
     private ScreeningMode parseScreeningMode(String screeningModeStr) {

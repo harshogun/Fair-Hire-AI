@@ -225,10 +225,19 @@ def _fix_articles(text: str) -> str:
 def rewrite_inclusive(jd_text: str) -> dict:
     """
     Produce an inclusive rewritten version with flagged words replaced.
-    Returns changes list with before/after diffs.
+    Returns changes list with before/after diffs, category, and score reductions.
     """
     if not jd_text:
-        return {"original_text": "", "rewritten_text": "", "changes": []}
+        return {
+            "original_text": "",
+            "rewritten_text": "",
+            "changes": [],
+            "replacements": [],
+            "bias_score_before": 0.0,
+            "bias_score_after": 0.0,
+            "bias_reduction": "0%",
+            "total_replacements": 0,
+        }
 
     changes = []
     new_text = jd_text
@@ -243,13 +252,39 @@ def rewrite_inclusive(jd_text: str) -> dict:
                 replacement = replacements[0]
                 new_text, n = pattern.subn(replacement, new_text)
                 if n:
-                    changes.append({"from": word, "to": replacement, "count": n})
+                    if bank is MASCULINE_CODED_WORDS:
+                        cat = "GENDER_MASCULINE"
+                    elif bank is FEMININE_CODED_WORDS:
+                        cat = "GENDER_FEMININE"
+                    else:
+                        cat = "AGE_EXCLUSIONARY"
+                    changes.append({"from": word, "to": replacement, "count": n, "category": cat})
 
     if changes:
         new_text = _fix_articles(new_text)
+
+    # Compute bias scores before and after rewrite
+    before_analysis = analyze_bias(jd_text)
+    after_analysis = analyze_bias(new_text)
+
+    score_before = float(before_analysis.get("bias_score", 0.0))
+    score_after = float(after_analysis.get("bias_score", 0.0))
+
+    if score_before > 0:
+        red_pct = round(((score_before - score_after) / score_before) * 100)
+        reduction_str = f"{max(0, red_pct)}%"
+    elif len(changes) > 0:
+        reduction_str = "100%"
+    else:
+        reduction_str = "0%"
 
     return {
         "original_text": jd_text,
         "rewritten_text": new_text,
         "changes": changes,
+        "replacements": changes,
+        "bias_score_before": round(score_before, 2),
+        "bias_score_after": round(score_after, 2),
+        "bias_reduction": reduction_str,
+        "total_replacements": sum(c.get("count", 1) for c in changes),
     }
